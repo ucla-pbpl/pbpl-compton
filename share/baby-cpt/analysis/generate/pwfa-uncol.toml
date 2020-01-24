@@ -1,0 +1,76 @@
+[PrimaryGenerator]
+# If PythonGenerator terminates before reaching NumEvents, then subsequent
+# generated events are aborted
+
+# Generates electron/positron pairs to illustrate magnetic design
+PythonGenerator = 'pwfa.pattern_spray'
+NumEvents = 100
+
+# Generates gammas along z-axis to demonstrate Compton performance at 20 MeV
+# PythonGenerator = 'cpt.repetitive_spray'
+# PythonGeneratorArgs = ['gamma', '20*MeV', '0*mm', '0*mm', '-10*mm']
+# NumEvents = 10000
+
+[Geometry.World]
+Type = 'G4Box'
+pX = 2000.0   # X half-length (unit=mm)
+pY = 2000.0   # Y half-length (unit=mm)
+pZ = 2400.0   # Z half-length (unit=mm)
+Material = 'G4_He'
+Translation = [0, 0, 0]
+Rotation = [0, 0, 0]
+Color = [0.0, 0.2, 1.0, 0.2]
+Visible = false
+
+[Geometry.World.Converter]
+Type = 'G4Box'
+pX = 2.0
+pY = 40.0
+pZ = 2.0
+Material = 'G4_Li'
+Translation = [0.0, 0.0, -2.0]
+Rotation = [0, 0, 0]
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleTop]
+Type = 'CadMesh'
+File = '../../cad/pwfa.stl'
+SolidName = 'cpt_pole:top'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleBottom]
+Type = 'CadMesh'
+File = '../../cad/pwfa.stl'
+SolidName = 'cpt_pole:bottom'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonYoke]
+Type = 'CadMesh'
+File = '../../cad/pwfa.stl'
+SolidName = 'cpt_yoke:right'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.Coils]
+Type = 'CadMesh'
+File = '../../cad/pwfa-coils.stl'
+Material = 'G4_Cu'
+Color = [0.72, 0.45, 0.20, 1.0]
+
+[Geometry.World.ComptonScint]
+Type = 'CadMesh'
+File = '../../cad/pwfa.stl'
+SolidName = 'cpt_scint:right'
+Material = 'G4_CESIUM_IODIDE'
+Color = [0.082, 0.722, 0.859, 0.3]
+
+[Fields.Cpt]
+Type = 'ImportedMagneticField'
+File = '../../field/B-field-4mm.h5'
+
+[Detectors.ComptonScint]
+Type = 'SimpleDepositionSD'
+Volumes = ['World.ComptonScint']
+File = 'edep-uncol.h5'

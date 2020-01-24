@@ -1,0 +1,12 @@
+/vis/open VRML2FILE
+/vis/drawVolume
+#/vis/viewer/flush
+/vis/scene/add/trajectories smooth
+#/vis/modeling/trajectories/create/drawByCharge
+#/vis/modeling/trajectories/drawByCharge-0/setRGBA 1 0.0 0.514 0.722 1
+#/vis/modeling/trajectories/drawByCharge-0/setRGBA 0 0.0 0.682 0.345 1
+#/vis/modeling/trajectories/drawByCharge-0/setRGBA -1 0.902 0.392 0.0 1
+/vis/scene/endOfEventAction accumulate
+/vis/scene/endOfRunAction accumulate
+#/vis/scene/add/axes
+#/tracking/verbose 2
