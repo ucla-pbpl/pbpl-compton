@@ -1,0 +1,104 @@
+[PrimaryGenerator]
+PythonGenerator = 'pwfa.pattern_spray'
+PythonGeneratorArgs = []
+NumEvents = 1000
+
+[Geometry.World]
+Type = 'G4Box'
+pX = 2000.0   # X half-length (unit=mm)
+pY = 2000.0   # Y half-length (unit=mm)
+pZ = 2400.0   # Z half-length (unit=mm)
+# Material = 'G4_He'
+Material = 'G4_Galactic'
+Rotation = [0, 0, 0]
+Translation = [0, 0, 0]
+Color = [0.0, 0.2, 1.0, 0.2]
+Visible = false
+
+[Geometry.World.Converter]
+Type = 'G4Box'
+pX = 2.5
+pY = 31.0
+pZ = 1.0
+Material = 'G4_Li'
+Rotation = [0, 0, 0]
+Translation = [0.0, 0.0, -1.0]
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleTop]
+Type = 'CadMesh'
+File = '../../cad/pwfa.stl'
+SolidName = 'cpt_pole:top'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleBottom]
+Type = 'CadMesh'
+File = '../../cad/pwfa.stl'
+SolidName = 'cpt_pole:bottom'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.Collimator]
+Type = 'CadMesh'
+File = '../../cad/collimator-12mm.stl'
+Material = 'G4_W'
+Color = [0.8, 0.8, 0.8, 1.0]
+
+[Geometry.World.ComptonYoke]
+Type = 'CadMesh'
+File = '../../cad/pwfa.stl'
+SolidName = 'cpt_yoke:right'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.Coils]
+Type = 'CadMesh'
+File = '../../cad/pwfa-coils.stl'
+Material = 'G4_Cu'
+Color = [0.72, 0.45, 0.20, 1.0]
+
+# [Geometry.World.ComptonScint]
+# Type = 'CadMesh'
+# File = '../../cad/pwfa.stl'
+# SolidName = 'cpt_scint:right'
+# Material = 'G4_CESIUM_IODIDE'
+# Color = [0.082, 0.722, 0.859, 0.3]
+
+[Geometry.World.ComptonScint]
+Type = 'G4Box'
+pX = 5.0
+pY = 75.0
+pZ = 112.5
+Material = 'G4_CESIUM_IODIDE'
+Transformation = [
+  ['TranslateZ', 'TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+  [112.5, 30.0, 5.0, 28.0, 40.1]]
+Color = [0.082, 0.722, 0.859, 0.3]
+
+# [Geometry.World.ScintShield]
+# Type = 'G4Box'
+# pX = 5.0
+# pY = 75.0
+# pZ = 2.5
+# Material = 'G4_W'
+# Transformation = [
+#   ['TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+#   [27.5, 5.0, 28.0, 40.0]]
+# Color = [0.8, 0.8, 0.8, 1.0]
+
+[Geometry.World.ScintShield]
+Type = 'G4Box'
+pX = 11.0
+pY = 75.0
+pZ = 2.5
+Material = 'G4_W'
+Transformation = [
+  ['TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+  [27.5, -1.0, 28.0, 40.0]]
+Color = [0.8, 0.8, 0.8, 1.0]
+
+[Fields.Cpt]
+Type = 'ImportedMagneticField'
+File = '../../field/B-field-4mm.h5'
+DeltaChord = 0.1  # tracking resolution within magnetic field (mm)

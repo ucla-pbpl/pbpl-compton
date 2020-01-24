@@ -1,0 +1,5 @@
+# Github only allows preview of PDF, STL, JPG, PNG file from its own LFS
+# storage, so we just keep those types in regular git storage.
+
+*.h5 filter=lfs diff=lfs merge=lfs -text
+*.stp filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,30 @@
+[Files]
+Input = 'trajectories/trajectories.h5'
+#STEPOutput = 'out/collimator.stp'
+STLOutput = 'out/collimator.stl'
+DiagnosticOutput = 'out/diagnostic.pdf'
+
+[ScintillatorTransformation]
+# transformation from YZ plane to scintillator entrance plane
+Translation = [40.0, 0.0, 0.0]
+Rotation = [0.0, 28.0, 0.0]    # ZYZ
+
+[CollimatorTransformation]
+# transformation from YZ plane to collimator exit plane
+Translation = [40.0, 0.0, 0.0]
+Rotation = [0.0, 28.0, 0.0]    # ZYZ
+
+[Pores]
+# 10mm thick, r=0.45a
+# 15mm thick, r=0.42a
+a = 4.0    # lattice constant (mm)
+r = 0.43     # in units of a
+z0 = 0.0
+lz = 250.0
+ly = 150.0
+
+[Dimensions]
+p0 = [-12.0, -75.0, 30.0]
+p1 = [0.0, 75.0, 255.0]
+pole_b1 = 235.0
+pole_c0 = 15.0

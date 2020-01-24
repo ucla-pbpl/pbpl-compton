@@ -1,0 +1,70 @@
+> du -h
+377M	./E300 PWFA/Unmatched Trailing (s=0.01)
+320M	./E300 PWFA/Unmatched Trailing (s=0.17)
+401M	./E300 PWFA/Unmatched Trailing (s=0.14)
+309M	./E300 PWFA/Matched Trailing (s=0.06)
+1.4G	./E300 PWFA
+98M	./Filamentation
+28M	./SFQED/IST/a0_8
+28M	./SFQED/IST/a0_5
+55M	./SFQED/IST
+108M	./SFQED/MPIK
+162M	./SFQED
+1.7G	.
+
+> ls -Rh
+.:
+total 0
+0 E300 PWFA/  0 Filamentation/  0 SFQED/
+
+./E300 PWFA:
+total 0
+0 Matched Trailing (s=0.06)/    0 Unmatched Trailing (s=0.14)/
+0 Unmatched Trailing (s=0.01)/  0 Unmatched Trailing (s=0.17)/
+
+./E300 PWFA/Matched Trailing (s=0.06):
+total 309M
+113M d2W_both.txt   113M d2W_drive.txt    84M d2W_trailing.txt
+
+./E300 PWFA/Unmatched Trailing (s=0.01):
+total 377M
+111M d2W_both.txt     87M d2W_trailing.txt
+111M d2W_drive.txt    70M pic_bet_d2W.txt
+
+./E300 PWFA/Unmatched Trailing (s=0.14):
+total 401M
+114M d2W_both.txt     88M d2W_trailing.txt
+114M d2W_drive.txt    88M pic_bet_d2W.txt
+
+./E300 PWFA/Unmatched Trailing (s=0.17):
+total 320M
+115M d2W_both.txt   115M d2W_drive.txt    91M d2W_trailing.txt
+
+./Filamentation:
+total 98M
+98M filamentation_solid_d2W.txt
+
+./SFQED:
+total 0
+0 IST/  0 MPIK/
+
+./SFQED/IST:
+total 0
+0 a0_5/  0 a0_8/
+
+./SFQED/IST/a0_5:
+total 28M
+14M Radiated_Energy_Cross_Section_low.txt
+14M Radiated_Energy_Cross_Section.txt
+
+./SFQED/IST/a0_8:
+total 28M
+14M Radiated_Energy_Cross_Section_low.txt
+14M Radiated_Energy_Cross_Section.txt
+
+./SFQED/MPIK:
+total 108M
+27M d2J_dMeVd2mrad_LCFA_w2.4_xi7.2.txt
+27M d2J_dMeVd2mrad_LCFA_w3.0_xi5.7.txt
+27M d2J_dMeVd2mrad_LCS+LCFA_w2.4_xi7.2.txt
+27M d2J_dMeVd2mrad_LCS+LCFA_w3.0_xi5.7.txt

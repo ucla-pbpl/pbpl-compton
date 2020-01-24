@@ -1,0 +1,9 @@
+/vis/open VRML2FILE
+/vis/drawVolume
+#/vis/viewer/flush
+/vis/scene/add/trajectories smooth
+#/vis/modeling/trajectories/create/drawByCharge
+/vis/scene/endOfEventAction accumulate
+/vis/scene/endOfRunAction accumulate
+/vis/scene/add/axes
+#/tracking/verbose 2

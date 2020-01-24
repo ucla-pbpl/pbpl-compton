@@ -1,0 +1,31 @@
+[PrimaryGenerator]
+PythonGenerator = 'pbpl.compton.generators.repeater'
+PythonGeneratorArgs = ['gamma', '1*MeV', '[0,0,-20*mm]', '[0,0,1]']
+NumEvents = 1000
+
+[Geometry.World]
+Type = 'G4Box'
+pX = 20.0
+pY = 20.0
+pZ = 20.0
+Material = 'G4_Galactic'
+Visible = false
+
+[Geometry.World.Converter]
+Type = 'G4Box'
+pX = 10.0
+pY = 10.0
+pZ = 0.5
+Material = 'G4_Li'
+Transformation = [['TranslateZ'], [-0.5]]
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Detectors.Converter]
+Type ='TransmissionSD'
+Volumes = ['World.Converter']
+File = 'transmission.h5'
+Particles = ['e-', 'e+', 'gamma']
+
+[EventActions.Status]
+Type = 'Status'
+UpdatePeriod = 1.0

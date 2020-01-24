@@ -1,0 +1,166 @@
+[PrimaryGenerator]
+PythonGenerator = 'sfqed.pattern_spray'
+PythonGeneratorArgs = []
+NumEvents = 1000
+
+[Geometry.World]
+Type = 'G4Box'
+pX = 2000.0   # X half-length (unit=mm)
+pY = 2000.0   # Y half-length (unit=mm)
+pZ = 2400.0   # Z half-length (unit=mm)
+Material = 'G4_Galactic'
+Visible = false
+
+# This is a bit of a hack to filter out visualization of primary gammas
+# trajectories.  Launch primary gammas from here and use the
+# 'originVolumeFilter'.
+[Geometry.World.PrimaryOrigin]
+Type = 'G4Box'
+pX = 1.0
+pY = 1.0
+pZ = 1.0
+Translation = [0.0, 0.0, -100.0]
+Material = 'G4_Galactic'
+Visible = false
+
+[Geometry.World.Converter]
+Type = 'G4Box'
+pX = 2.5
+pY = 31.0
+pZ = 1.0
+Material = 'G4_Li'
+Rotation = [0, 0, 0]
+Translation = [0.0, 0.0, -1.0]
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleTopRight]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'cpt_pole:top_right'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleBottomRight]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'cpt_pole:bottom_right'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleTopLeft]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'cpt_pole:top_left'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleBottomLeft]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'cpt_pole:bottom_left'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonYokeRight]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'cpt_yoke:right'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonYokeLeft]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'cpt_yoke:left'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.PairYoke]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'sf_yoke:yoke'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.PairPoleBottom]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'sf_pole:bottom'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.PairPoleTop]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'sf_pole:top'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.Coils]
+Type = 'CadMesh'
+File = '../../cad/sfqed-coils.stl'
+Material = 'G4_Cu'
+Color = [0.72, 0.45, 0.20, 1.0]
+
+[Geometry.World.PairScintRight]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'sf_scint:right'
+Material = 'G4_CESIUM_IODIDE'
+Color = [0.082, 0.722, 0.859, 0.3]
+
+[Geometry.World.PairScintLeft]
+Type = 'CadMesh'
+File = '../../cad/sfqed.stl'
+SolidName = 'sf_scint:left'
+Material = 'G4_CESIUM_IODIDE'
+Color = [0.082, 0.722, 0.859, 0.3]
+
+[Geometry.World.ComptonScintRight]
+Type = 'G4Box'
+pX = 5.0
+pY = 75.0
+pZ = 112.5
+Material = 'G4_CESIUM_IODIDE'
+Transformation = [
+  ['TranslateZ', 'TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+  [112.5, 30.0, 5.0, 28.0, 40.1]]
+Color = [0.082, 0.722, 0.859, 0.3]
+
+[Geometry.World.ComptonScintLeft]
+Type = 'G4Box'
+pX = 5.0
+pY = 75.0
+pZ = 112.5
+Material = 'G4_CESIUM_IODIDE'
+Transformation = [
+  ['TranslateZ', 'TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+  [112.5, 30.0, -5.0, -28.0, -40.1]]
+Color = [0.082, 0.722, 0.859, 0.3]
+
+[Geometry.World.ScintShieldRight]
+Type = 'G4Box'
+pX = 5.0
+pY = 75.0
+pZ = 2.5
+Material = 'G4_W'
+Transformation = [
+  ['TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+  [27.5, 5.0, 28.0, 40.0]]
+Color = [0.8, 0.8, 0.8, 1.0]
+
+[Geometry.World.ScintShieldLeft]
+Type = 'G4Box'
+pX = 5.0
+pY = 75.0
+pZ = 2.5
+Material = 'G4_W'
+Transformation = [
+  ['TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+  [27.5, -5.0, -28.0, -40.0]]
+Color = [0.8, 0.8, 0.8, 1.0]
+
+[Fields.Cpt]
+Type = 'ImportedMagneticField'
+File = '../../field/B-field-12600A-5mm.h5'
+DeltaChord = 0.1  # tracking resolution within magnetic field (mm)

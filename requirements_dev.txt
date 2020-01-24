@@ -1,0 +1,13 @@
+pip
+bumpversion
+wheel
+watchdog
+flake8
+#tox
+coverage
+Sphinx
+sphinx_rtd_theme
+sphinx-argparse
+sphinxcontrib-autoprogram
+pytest
+pyevtk
