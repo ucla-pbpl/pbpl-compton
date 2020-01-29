@@ -99,7 +99,7 @@ Color = [0.8, 0.8, 0.8, 1.0]
 
 [Fields.Cpt]
 Type = 'ImportedMagneticField'
-File = '../../field/B-field-4mm.h5'
+File = '../../field/B-field-18000A.h5'
 DeltaChord = 0.1  # tracking resolution within magnetic field (mm)
 
 [Detectors.ComptonScint]
