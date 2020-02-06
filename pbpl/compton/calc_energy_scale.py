@@ -137,7 +137,7 @@ def main():
 
     ax.semilogy(
         position/axes[0].unit, energy/axes[1].unit,
-        marker='.', ls='', markersize=0.001,
+        marker='.', ls='', markersize=2.0, markeredgewidth=0,
         color='k')
 
     aeval.symtable['fitval'] = v
