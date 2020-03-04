@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 import toml
 import h5py
+import tqdm
 import scipy.spatial as spatial
 from scipy.optimize import minimize_scalar
 from scipy.interpolate import LinearNDInterpolator
@@ -24,10 +25,12 @@ from OCC.Core.BRepTools import *
 from OCC.Core.GC import *
 from OCC.Core.GeomAPI import *
 from OCC.Core.gp import *
+from OCC.Core.Message import *
 from OCC.Core.STEPControl import *
 from OCC.Core.StlAPI import *
 from OCC.Core.TColgp import *
 from OCC.Core.TopoDS import *
+from OCC.Core.TopTools import *
 from scipy.ndimage import gaussian_filter
 from Geant4.hepunit import *
 import pbpl.common as common
@@ -36,6 +39,9 @@ import pbpl.compton as compton
 # Use mm internally for length scale.  OpenCascade internally also uses mm=1.0,
 # so don't bother converting lengths when sending/receiving from OpenCascade.
 assert(mm == 1.0)
+
+fmt = ('{desc:>40s}:{percentage:3.0f}% ' +
+       '|{bar}| {n_fmt:>6s}/{total_fmt:<6s}')
 
 def get_parser():
     parser = argparse.ArgumentParser(
@@ -119,8 +125,11 @@ def build_pores(conf, lattice):
 
     grid = np.array(conf['Slab']['Volume'])*mm
     x_cs = np.linspace(grid[0,0], grid[0,1], conf['Pores']['NumCrossSections'])
-    for i, q in enumerate(lattice):
-        print(i, len(lattice))
+#    for i, q in tqdm.tqdm(enumerate(lattice)):
+    for i, q in tqdm.tqdm(list(
+            enumerate(lattice)), bar_format=fmt, desc='Cutting pores'):
+
+#        print(i, len(lattice))
         pore = BRepOffsetAPI_ThruSections(True, False)
         for x in x_cs:
             # BRepOffsetAPI_MakeOffsetShape is suuuuuuuper sloooooooow.
@@ -158,6 +167,18 @@ def build_collimator(conf, lattice):
     magnet = build_magnet(conf)
     result = BRepAlgoAPI_Cut(slab, magnet).Shape()
     pores = build_pores(conf, lattice)
+
+    # cutter = BRepAlgoAPI_Cut()
+    # L1 = TopTools_ListOfShape()
+    # L1.Append(result)
+    # L2 = TopTools_ListOfShape()
+    # L2.Append(pores)
+    # cutter.SetArguments(L1)
+    # cutter.SetTools(L2)
+    # cutter.SetRunParallel(True)
+    # cutter.Build()
+    # result = cutter.Shape()
+
     result = BRepAlgoAPI_Cut(result, pores).Shape()
     if 'Chamfer' in conf:
         chamfer = build_chamfer(conf)
@@ -172,7 +193,9 @@ def calc_vectorfield(conf):
 
     result = []
     with h5py.File(conf['VectorField']['Input'], 'r') as fin:
-        for group_name, gin in fin.items():
+        for group_name, gin in tqdm.tqdm(
+                fin.items(), bar_format=fmt, desc='Reading trajectories'):
+
             x = gin['x'][:]*meter
             Mx = np.array([compton.transform(M, q) for q in x])
             grid_mask = compton.in_volume(grid, Mx)
@@ -183,17 +206,24 @@ def calc_vectorfield(conf):
             result.append(np.array((Mx[:-1], n)))
     x, n = np.hstack(result)
     mirror_x = x * np.array((1,-1,1))
-    delaunay = spatial.Delaunay(np.concatenate((x, mirror_x)))
 
+    bar = tqdm.tqdm(
+        total=4, bar_format=fmt, desc='Creating smooth vectorfield')
+    delaunay = spatial.Delaunay(np.concatenate((x, mirror_x)))
+    bar.update(1)
     nearest_interp = NearestNDInterpolator(x, n)
     linear_interp = LinearNDInterpolator(x, n)
+    bar.update(1)
     epsilon = 0.1*dx
     dims = [np.arange(grid[q,0], grid[q,1]+epsilon, dx) for q in [0,1,2]]
 
     # Use linear interpolation within convex hull, else use nearest-neighbor.
     X, Y, Z = np.meshgrid(*dims, indexing='ij')
     n_XYZ = linear_interp((X, np.abs(Y), Z))
+    bar.update(1)
     n_XYZ_nearest = nearest_interp((X, np.abs(Y), Z))
+    bar.update(1)
+    bar.close()
     mask = np.isnan(n_XYZ)
     n_XYZ[mask] = n_XYZ_nearest[mask]
     n_XYZ[Y<0] *= np.array((1,-1,1))
@@ -276,6 +306,8 @@ def calculate_pole_mask(conf, lattice, r):
 
 
 def calc_lattice(conf, interpolator, delaunay):
+    bar = tqdm.tqdm(
+        total=2, bar_format=fmt, desc='Creating pore lattice')
     pore_conf = conf['Pores']
     a = pore_conf['a']*mm
     delta_z = pore_conf['delta_z']*mm
@@ -296,11 +328,14 @@ def calc_lattice(conf, interpolator, delaunay):
 
     tri_lattice = tri_lattice[tri_lattice[:,2] > z0]
     tri_lattice = tri_lattice[delaunay.find_simplex(tri_lattice)>=0]
+    bar.update(1)
     M_tri_lattice = np.array([compton.transform(M, q) for q in tri_lattice])
 
     # discard lattice points within a given distance from magnet pole
     tri_lattice = tri_lattice[
         calculate_pole_mask(conf, M_tri_lattice, magnet_buffer)]
+    bar.update(1)
+    bar.close()
 
     hex_lattice = {}
     N = 6
@@ -309,8 +344,9 @@ def calc_lattice(conf, interpolator, delaunay):
         (np.zeros_like(phi), np.sin(phi), np.cos(phi))).T
 
     # integrate hexagonal lattice through vectorfield
-    for i, p in enumerate(tri_lattice):
-        print(i, len(tri_lattice))
+    for i, p in tqdm.tqdm(list(
+            enumerate(tri_lattice)), bar_format=fmt,
+            desc='Integrating lattice trajectories'):
         for q in hex_coords:
             coord = p+q
             key = (round(coord[1], 3), round(coord[2], 3))
@@ -353,6 +389,10 @@ def main():
     collimator = build_collimator(conf, lattice)
 
     for outconf in conf['Output']:
+        filename = outconf['Filename']
+        path = os.path.split(filename)[0]
+        if path != '':
+            os.makedirs(path, exist_ok=True)
         if outconf['Type'] == 'STL':
             # clear out any existing mesh
             breptools_Clean(collimator)
@@ -361,11 +401,11 @@ def main():
                 outconf['IsRelative'], outconf['AngularDeflection']*deg, True)
             stl_writer = StlAPI_Writer()
             stl_writer.SetASCIIMode(False)
-            stl_writer.Write(collimator, outconf['Filename'])
+            stl_writer.Write(collimator, filename)
         elif outconf['Type'] == 'STEP':
             step_writer = STEPControl_Writer()
             step_writer.Transfer(collimator, STEPControl_AsIs)
-            status = step_writer.Write(outconf['Filename'])
+            status = step_writer.Write(filename)
 
     return 0
 
