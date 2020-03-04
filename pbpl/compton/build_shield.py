@@ -3,32 +3,14 @@ import os, sys
 import argparse
 import numpy as np
 import toml
-import h5py
-import scipy.spatial as spatial
-from scipy.optimize import minimize_scalar
-from scipy.interpolate import LinearNDInterpolator
-from scipy.interpolate import NearestNDInterpolator
-from scipy.interpolate import interp1d
-from scipy.interpolate import RegularGridInterpolator
-from scipy.integrate import ode
-from scipy.linalg import norm, inv
-from scipy.ndimage.interpolation import shift
-from shapely.geometry import LinearRing
-from OCC.Core.BRep import *
 from OCC.Core.BRepAlgoAPI import *
 from OCC.Core.BRepBuilderAPI import *
 from OCC.Core.BRepMesh import *
-from OCC.Core.BRepOffsetAPI import *
 from OCC.Core.BRepPrimAPI import *
 from OCC.Core.BRepTools import *
-from OCC.Core.GC import *
-from OCC.Core.GeomAPI import *
 from OCC.Core.gp import *
 from OCC.Core.STEPControl import *
 from OCC.Core.StlAPI import *
-from OCC.Core.TColgp import *
-from OCC.Core.TopoDS import *
-from scipy.ndimage import gaussian_filter
 from Geant4.hepunit import *
 import pbpl.common as common
 import pbpl.compton as compton
@@ -89,6 +71,10 @@ def main():
     shield = build_shield(conf)
 
     for outconf in conf['Output']:
+        filename = outconf['Filename']
+        path = os.path.split(filename)[0]
+        if path != '':
+            os.makedirs(path, exist_ok=True)
         if outconf['Type'] == 'STL':
             # clear out any existing mesh
             breptools_Clean(shield)
@@ -97,11 +83,11 @@ def main():
                 outconf['IsRelative'], outconf['AngularDeflection']*deg, True)
             stl_writer = StlAPI_Writer()
             stl_writer.SetASCIIMode(False)
-            stl_writer.Write(shield, outconf['Filename'])
+            stl_writer.Write(shield, filename)
         elif outconf['Type'] == 'STEP':
             step_writer = STEPControl_Writer()
             step_writer.Transfer(shield, STEPControl_AsIs)
-            status = step_writer.Write(outconf['Filename'])
+            status = step_writer.Write(filename)
 
     return 0
 
