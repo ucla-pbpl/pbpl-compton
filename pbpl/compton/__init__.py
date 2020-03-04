@@ -15,4 +15,5 @@ sys.stdout = temp
 from .boost import *
 from .core import build_transformation
 from .core import transform
+from .core import in_volume
 from .tasks import *

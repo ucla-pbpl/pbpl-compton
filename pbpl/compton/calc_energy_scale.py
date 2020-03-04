@@ -50,12 +50,6 @@ def get_energy(gin):
 def fit_func(x, c0, c1, c2, c3):
     return c0 + c1*x + c2*x**2 + c3*x**3
 
-def in_volume(vol, x):
-    return np.logical_and.reduce(
-        (x[:,0]>=vol[0,0], x[:,0]<=vol[0,1],
-         x[:,1]>=vol[1,0], x[:,1]<=vol[1,1],
-         x[:,2]>=vol[2,0], x[:,2]<=vol[2,1]))
-
 Axis = namedtuple('Axis', 'label unit xlim')
 
 def get_axis(aeval, label, unit, xlim):
@@ -103,10 +97,10 @@ def main():
             E0.append(get_energy(gin))
     x = np.array(x)
     E0 = np.array(E0)
-    prefilter_mask = in_volume(prefilter, x[:,0,:])
+    prefilter_mask = compton.in_volume(prefilter, x[:,0,:])
     x_pre = x[prefilter_mask,:,:]
     E0_pre = E0[prefilter_mask]
-    postfilter_mask = in_volume(postfilter, x_pre[:,1,:])
+    postfilter_mask = compton.in_volume(postfilter, x_pre[:,1,:])
     x_post = x_pre[postfilter_mask,:,:]
     E0_post = E0_pre[postfilter_mask]
 

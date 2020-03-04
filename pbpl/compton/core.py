@@ -26,4 +26,10 @@ def build_transformation(spec, length_unit=1.0, angle_unit=1.0):
     return result
 
 def transform(M, x):
-    return (M[:3,:3] @ x) + M[:3,3]
+    return (M[:3,:3] @ x.T).T + M[:3,3]
+
+def in_volume(vol, x):
+    return np.logical_and.reduce(
+        (x[:,0]>=vol[0,0], x[:,0]<=vol[0,1],
+         x[:,1]>=vol[1,0], x[:,1]<=vol[1,1],
+         x[:,2]>=vol[2,0], x[:,2]<=vol[2,1]))
