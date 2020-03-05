@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os, sys, random
 import argparse
+import asteval
 import numpy as np
 import toml
 import time
@@ -138,6 +139,57 @@ class SimpleDepositionSD(g4.G4VSensitiveDetector):
         f['edep'] = np.array(self.edep)/keV
         f['edep'].attrs.create('num_events', num_events)
         f.close()
+
+class BinnedDepositionSD(g4.G4VSensitiveDetector):
+    def __init__(self, name, conf):
+        g4.G4VSensitiveDetector.__init__(self, name)
+        self.filename = conf['File']
+        self.groupname = conf['Group']
+        self.M = compton.build_transformation(conf['Transformation'], mm, deg)
+        aeval = asteval.Interpreter(use_numpy=True)
+        for q in g4.hepunit.__dict__:
+            aeval.symtable[q] = g4.hepunit.__dict__[q]
+        self.bin_edges = [aeval(q) for q in conf['BinEdges']]
+        self.hist = np.zeros([len(q)-1 for q in self.bin_edges])
+        self.update_interval = self.hist.size
+        self.position = []
+        self.edep = []
+
+    def Initialize(self, hit_collection):
+        pass
+
+    def ProcessHits(self, step, history):
+        self.position.append(
+            G4ThreeVector_to_list(step.GetPreStepPoint().GetPosition()))
+        self.edep.append(step.GetTotalEnergyDeposit())
+
+    def EndOfEvent(self, hit_collection):
+        if len(self.edep) > self.update_interval:
+            self.update_histo()
+
+    def update_histo(self):
+        if len(self.position)>0:
+            M_position = compton.transform(self.M, np.array(self.position))
+            B, _ = np.histogramdd(
+                M_position, self.bin_edges, weights=np.array(self.edep))
+            self.hist += B
+            self.position = []
+            self.edep = []
+
+    def finalize(self, num_events):
+        self.update_histo()
+        path = os.path.split(self.filename)[0]
+        if path != '':
+            os.makedirs(path, exist_ok=True)
+        fout = h5py.File(self.filename, 'w')
+        gout = fout.create_group(self.groupname)
+        gout['edep'] = self.hist/MeV
+        gout['edep'].attrs.create('num_events', num_events)
+        gout['edep'].attrs.create('unit', np.string_('MeV'))
+        for i, dset_name in enumerate(['xbin', 'ybin', 'zbin']):
+            gout[dset_name] = self.bin_edges[i]/mm
+            gout[dset_name].attrs.create('unit', np.string_('mm'))
+        fout.close()
 
 TransmissionResult = namedtuple(
     'TransmissionResult', ['position', 'direction', 'energy'])
@@ -311,6 +363,10 @@ def create_fields(conf):
             field_manager.SetDetectorField(field)
             field_manager.CreateChordFinder(field)
             chord_finder = field_manager.GetChordFinder()
+            # field_manager.SetMaximumEpsilonStep(0.001)
+            # field_manager.SetMinimumEpsilonStep(5e-5)
+            # field_manager.SetDeltaOneStep(0.01*mm)
+            # field_manager.SetDeltaIntersection(0.001*mm)
             if 'DeltaChord' in c:
                 chord_finder.SetDeltaChord(c['DeltaChord']*mm)
             if 'ScalingFactor' in c:
@@ -333,6 +389,8 @@ def create_detectors(conf):
         sd_type = c['Type']
         if sd_type == 'SimpleDepositionSD':
             sd = SimpleDepositionSD('pbpl/' + name, c['File'])
+        elif sd_type == 'BinnedDepositionSD':
+            sd = BinnedDepositionSD('pbpl/' + name, c)
         elif sd_type == 'TransmissionSD':
             sd = TransmissionSD('pbpl/' + name, c['File'], c['Particles'])
         else:
