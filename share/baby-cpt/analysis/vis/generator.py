@@ -4,13 +4,26 @@ from Geant4.hepunit import *
 import numpy as np
 from numpy import cos, sin
 
+def ugh():
+    yield 'e-', g4.G4ThreeVector(), g4.G4ThreeVector(0,0,1), 4*MeV
+
 def pattern_spray():
     energies = (15*MeV)/2**np.arange(7)
     for particle in ['e+', 'e-']:
         for energy in energies:
             yield particle, g4.G4ThreeVector(), g4.G4ThreeVector(0,0,1), energy
 
-    energies = (15*MeV/8)/2**np.arange(3)
+    energies = (15*MeV/8)/2**np.arange(4)
+    for particle in ['e-']:
+        for energy in energies:
+            yield particle, g4.G4ThreeVector(0,-10*mm,0), g4.G4ThreeVector(0,0,1), energy
+
+    energies = (15*MeV/8)/2**np.arange(4)
+    for particle in ['e-']:
+        for energy in energies:
+            yield particle, g4.G4ThreeVector(0,-20*mm,0), g4.G4ThreeVector(0,0,1), energy
+
+    energies = (15*MeV/8)/2**np.arange(4)
     for particle in ['e-']:
         for energy in energies:
             yield particle, g4.G4ThreeVector(0,-30*mm,0), g4.G4ThreeVector(0,0,1), energy
@@ -18,8 +31,8 @@ def pattern_spray():
 def collimator_spray():
     direction = g4.G4ThreeVector(0,0,1)
     for particle in ['e+', 'e-']:
-        for energy in np.logspace(np.log10(0.240), np.log10(14.0), 8)*MeV:
-            for y0 in np.linspace(-40.0, 40.0, 7)*mm:
+        for energy in np.logspace(np.log10(0.100), np.log10(3.0), 4)*MeV:
+            for y0 in np.arange(0, -20.01, -10)*mm:
                 location = g4.G4ThreeVector(0,y0,0)
                 yield particle, location, direction, energy
 

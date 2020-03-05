@@ -14,7 +14,7 @@ print('### RUNNING GEANT4 (design.wrl) ###')
 #     toml.dump(conf, fout)
 os.system('pbpl-compton-mc baby-cpt.toml vis.mac')
 #os.system('pbpl-compton-mc temp.toml vis.mac > /dev/null 2>&1')
-os.system('pbpl-compton-extrude-vrml g4_00.wrl --radius=0.8 --num-points=8 --output=design.wrl')
+os.system('pbpl-compton-extrude-vrml g4_00.wrl --radius=0.15 --num-points=8 --output=design.wrl')
 os.system('rm -f temp.toml g4*wrl *h5')
 
 # print('### RUNNING GEANT4 (gamma-20MeV.wrl) ###')
