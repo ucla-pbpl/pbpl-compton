@@ -146,12 +146,16 @@ def main():
     ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
 
     filename = conf['Files']['PlotOutput']
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    path = os.path.dirname(filename)
+    if path != '':
+        os.makedirs(path, exist_ok=True)
     plot.savefig(filename, transparent=True)
 
     if 'CalcOutput' in conf['Files']:
         filename = conf['Files']['CalcOutput']
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        path = os.path.dirname(filename)
+        if path != '':
+            os.makedirs(path, exist_ok=True)
         calc_output = {
             'EnergyScaleCoefficients' :
             { 'c0' : float(v['c0']),
