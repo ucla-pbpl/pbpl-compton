@@ -131,7 +131,7 @@ class SimpleDepositionSD(g4.G4VSensitiveDetector):
         pass
 
     def finalize(self, num_events):
-        path = os.path.split(self.filename)[0]
+        path = os.path.dirname(self.filename)
         if path != '':
             os.makedirs(path, exist_ok=True)
         f = h5py.File(self.filename, 'w')
@@ -178,7 +178,7 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
 
     def finalize(self, num_events):
         self.update_histo()
-        path = os.path.split(self.filename)[0]
+        path = os.path.dirname(self.filename)
         if path != '':
             os.makedirs(path, exist_ok=True)
         fout = h5py.File(self.filename, 'w')
@@ -222,7 +222,7 @@ class TransmissionSD(g4.G4VSensitiveDetector):
         pass
 
     def finalize(self, num_events):
-        path = os.path.split(self.filename)[0]
+        path = os.path.dirname(self.filename)
         if path != '':
             os.makedirs(path, exist_ok=True)
         fout = h5py.File(self.filename, 'w')

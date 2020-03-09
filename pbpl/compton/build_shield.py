@@ -72,7 +72,7 @@ def main():
 
     for outconf in conf['Output']:
         filename = outconf['Filename']
-        path = os.path.split(filename)[0]
+        path = os.path.dirname(filename)
         if path != '':
             os.makedirs(path, exist_ok=True)
         if outconf['Type'] == 'STL':

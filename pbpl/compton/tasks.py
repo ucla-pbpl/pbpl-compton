@@ -220,7 +220,7 @@ def RunMonteCarlo(
     # Any dataset with 'num_events' attribute is treated as 'data' and
     # is summed in the output.  Otherwise, datasets are treated as 'bins'
     # and are simply copied to the output.
-    path = os.path.split(out_filename)[0]
+    path = os.path.dirname(out_filename)
     if path != '':
         os.makedirs(path, exist_ok=True)
     with h5py.File(out_filename, 'w') as fout:
