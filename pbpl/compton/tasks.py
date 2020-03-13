@@ -131,6 +131,7 @@ def RunMonteCarloSingleIndex(
     num_threads = max(1, min(
         total_num_events//min_num_events_per_thread, max_num_threads))
     q, r = divmod(total_num_events, num_threads)
+
     num_events_per_thread = np.ones(num_threads, dtype=int)*q
     num_events_per_thread[0:r] += 1
     assert(total_num_events == num_events_per_thread.sum())
@@ -195,18 +196,31 @@ def RunMonteCarlo(
         indices, conf, reconf, out_filename,
         num_events_per_run, min_num_events_per_thread, max_num_threads):
     indices = np.array(indices).T
-    indices_shape = [len(x) for x in indices[0]]
+    runs_shape = [len(x)-int(y) for x, y in zip(indices[0], indices[3])]
     if isinstance(num_events_per_run, int):
         num_events_per_run = num_events_per_run * np.ones(
-            indices_shape, dtype=int)
+            runs_shape, dtype=int)
 
     filenames = {}
     for i in itertools.product(*[range(len(v)) for v in indices[0]]):
         desc = ', '.join(['{}={}'.format(A, B) for A, B in zip(indices[1], i)])
-        vals = np.array([indices[0][j][i[j]] for j in range(len(i))])
+        end_of_range = False
+        vals = []
+        for j in range(len(i)):
+            if indices[3][j]:
+                vals.append(indices[0][j][i[j]:i[j]+2])
+                if len(vals[-1]) != 2:
+                    end_of_range = True
+                    break
+            else:
+                vals.append(indices[0][j][i[j]])
+        if end_of_range:
+            continue
+
         f = NamedTemporaryFile('w', delete=False)
         filenames[i] = f.name
         f.close()
+
         RunMonteCarloSingleIndex(
             conf, reconf, vals,
             desc, f.name, num_events_per_run[i],
@@ -233,27 +247,29 @@ def RunMonteCarlo(
                     fin.copy(v, fout, k)
             fin.visititems(visit)
 
-        for i, (vals, label, unit) in enumerate(indices.T):
+        for i, (vals, label, unit, is_binned) in enumerate(indices.T):
             dset_name = 'i{}'.format(i)
-            try:
-                unit = float(aeval(unit))
-                fout[dset_name] = vals/unit
-            except TypeError:
-                fout[dset_name] = vals
+            if unit is None:
+                fout[dset_name] = np.array(vals, dtype='S')
+            else:
+                float_unit = float(aeval(unit))
+                fout[dset_name] = vals/float_unit
             fout[dset_name].attrs.create('label', np.string_(label))
             fout[dset_name].attrs.create('unit', np.string_(unit))
 
         num_events = {}
         for i in itertools.product(*[range(len(v)) for v in indices[0]]):
+            if i not in filenames:
+                continue
             with h5py.File(filenames[i], 'r') as fin:
                 def visit(k, v):
                     if 'num_events' not in v.attrs:
                         return
                     if k not in fout:
-                        dset_shape = indices_shape + list(v.shape)
+                        dset_shape = runs_shape + list(v.shape)
                         dset = fout.create_dataset(
                             k, shape=dset_shape, dtype=float)
-                        num_events[k] = np.zeros(indices_shape)
+                        num_events[k] = np.zeros(runs_shape)
                         dset.attrs.create('unit', np.string_(v.attrs['unit']))
                     fout[k][i] = v
                     num_events[k][i] = v.attrs['num_events']
