@@ -144,7 +144,10 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
     def __init__(self, name, conf):
         g4.G4VSensitiveDetector.__init__(self, name)
         self.filename = conf['File']
-        self.groupname = conf['Group']
+        if 'Group' in conf:
+            self.groupname = conf['Group']
+        else:
+            self.groupname = None
         self.M = compton.build_transformation(conf['Transformation'], mm, deg)
         aeval = asteval.Interpreter(use_numpy=True)
         for q in g4.hepunit.__dict__:
@@ -182,7 +185,10 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
         if path != '':
             os.makedirs(path, exist_ok=True)
         fout = h5py.File(self.filename, 'w')
-        gout = fout.create_group(self.groupname)
+        if self.groupname is not None:
+            gout = fout.create_group(self.groupname)
+        else:
+            gout = fout
         gout['edep'] = self.hist/MeV
         gout['edep'].attrs.create('num_events', num_events)
         gout['edep'].attrs.create('unit', np.string_('MeV'))
