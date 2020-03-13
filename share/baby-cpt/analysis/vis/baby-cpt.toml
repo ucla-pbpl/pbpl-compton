@@ -15,7 +15,7 @@ Visible = false
 [Geometry.World.Converter]
 Type = 'G4Box'
 pX = 2.0
-pY = 20.0
+pY = 30.0
 pZ = 2.0
 Material = 'G4_Li'
 Translation = [0.0, 0.0, -2.0]
@@ -37,13 +37,13 @@ Color = [1.0, 1.0, 1.0, 1.0]
 
 [Geometry.World.Collimator]
 Type = 'CadMesh'
-File = '../../cad/collimator/12mm-3mm/coarse.stl'
+File = '../../cad/collimator/10mm-2mm/coarse.stl'
 Material = 'G4_W'
 Color = [0.8, 0.8, 0.8, 1.0]
 
 [Geometry.World.ScintillatorShield]
 Type = 'CadMesh'
-File = '../../cad/shield.stl'
+File = '../../cad/shield/10mm/shield.stl'
 Material = 'G4_W'
 Color = [0.8, 0.8, 0.8, 1.0]
 
