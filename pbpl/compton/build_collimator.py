@@ -125,7 +125,8 @@ def build_pores(conf, lattice):
 
     grid = np.array(conf['Slab']['Volume'])*mm
     x_cs = np.linspace(grid[0,0], grid[0,1], conf['Pores']['NumCrossSections'])
-#    for i, q in tqdm.tqdm(enumerate(lattice)):
+    wall = conf['Pores']['wall']*mm
+
     for i, q in tqdm.tqdm(list(
             enumerate(lattice)), bar_format=fmt, desc='Cutting pores'):
 
@@ -139,7 +140,7 @@ def build_pores(conf, lattice):
                 ring.append(trajectory(x))
             ring = LinearRing(ring)
             pore_coords = np.array(
-                ring.parallel_offset(0.25*mm, 'right', join_style=2))[:-1]
+                ring.parallel_offset(0.5*wall, 'right', join_style=2))[:-1]
 
             polygon = BRepBuilderAPI_MakePolygon()
             for coord in pore_coords:
