@@ -15,6 +15,9 @@ sys.stdout = temp
 from .boost import *
 from .core import build_transformation
 from .core import transform
+from .core import in_volume
+from .core import gamma_to_edge
+from .core import edge_to_gamma
 from .tasks import *
 
 from .mc import run_main

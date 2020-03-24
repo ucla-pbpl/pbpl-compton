@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 import os, sys
+import argparse
+import toml
+import asteval
+from collections import namedtuple
+import math
 import numpy as np
 import lmfit
 from scipy.linalg import norm
@@ -11,6 +16,29 @@ from pbpl import common
 from pbpl import compton
 from pbpl.common.units import *
 from num2tex import num2tex
+from functools import reduce
+
+def get_parser():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description='Calculate energy scale from CST trajectory map',
+        epilog='''\
+Example:
+
+.. code-block:: sh
+
+  pbpl-compton-calc-energy-scale calc-energy-scale.toml
+''')
+    parser.add_argument(
+        'config_filename', metavar='conf-file',
+        help='Configuration file')
+    return parser
+
+def get_args():
+    parser = get_parser()
+    args = parser.parse_args()
+    args.conf = toml.load(args.config_filename)
+    return args
 
 def get_energy(gin):
     m0 = gin['m0'][()]*kg
@@ -19,83 +47,123 @@ def get_energy(gin):
     KE = E0 - m0*c_light**2
     return KE
 
-def fit_func(x, c0, c1, c2):
-    return np.exp(c0 + c1*x + c2*x**2)
+def fit_func(x, c0, c1, c2, c3):
+    return c0 + c1*x + c2*x**2 + c3*x**3
+
+Axis = namedtuple('Axis', 'label unit xlim')
+
+def get_axis(aeval, label, unit, xlim):
+    xlim = aeval(xlim)
+    if xlim is not None:
+        xlim = np.array(xlim)
+    return Axis(label, aeval(unit), xlim)
+
+def plot_annotation(ax, aeval, conf):
+    if 'Annotation' in conf:
+        for aconf in conf['Annotation']:
+            text = ''
+            for s in aconf['Text']:
+                text += aeval(s) + '\n'
+            kwargs = {}
+            if 'Size' in aconf:
+                kwargs['size'] = aconf['Size']
+            ax.text(
+                *aconf['Location'], text, va='top',
+                transform=ax.transAxes, **kwargs)
 
 def main():
-    common.setup_plot()
+    args = get_args()
+    conf = args.conf
+
+    # create safe interpreter for evaluation of configuration expressions
+    aeval = asteval.Interpreter(use_numpy=True)
+    for q in common.units.__all__:
+        aeval.symtable[q] = common.units.__dict__[q]
+
+    pconf = conf['Projection']
+    M = compton.build_transformation(pconf['Transformation'], mm, deg)
+    prefilter = np.array(pconf['Prefilter'])*mm
+    postfilter = np.array(pconf['Postfilter'])*mm
 
     energy = []
     position = []
-    theta0 = 28.0*deg
 
-    M = compton.build_transformation(
-        [ ['TranslateX', 'RotateY', 'TranslateZ'],
-          [-40.1, -28.0, -30.0] ], mm, deg)
-
-    with h5py.File('trajectories/trajectories.h5', 'r') as fin:
+    x = []
+    E0 = []
+    with h5py.File(conf['Files']['Input'], 'r') as fin:
         for gin in fin.values():
-            E0 = get_energy(gin)
-            x0 = gin['x'][0]*meter
-            x1 = gin['x'][-1]*meter
-            if x0[1] != 0.0:
-                continue
-            x1 = compton.transform(M, x1)
-            energy.append(E0)
-            position.append(x1[2])
-    energy = np.array(energy)
-    position = np.array(position)
+            x.append(
+                (gin['x'][0]*meter, compton.transform(M, gin['x'][-1]*meter)))
+            E0.append(get_energy(gin))
+    x = np.array(x)
+    E0 = np.array(E0)
+    prefilter_mask = compton.in_volume(prefilter, x[:,0,:])
+    x_pre = x[prefilter_mask,:,:]
+    E0_pre = E0[prefilter_mask]
+    postfilter_mask = compton.in_volume(postfilter, x_pre[:,1,:])
+    x_post = x_pre[postfilter_mask,:,:]
+    E0_post = E0_pre[postfilter_mask]
+
+    energy = E0_post.copy()
+    position = x_post[:,1,2].copy()
     args = np.argsort(energy)
     energy = energy[args]
     position = position[args]
 
     mod = lmfit.Model(fit_func)
-    params = mod.make_params(c0=0.0, c1=0.0, c2=0.0)
+    params = mod.make_params(c0=0.0, c1=0.0, c2=0.0, c3=0.0)
 
-    result = mod.fit(data=energy/MeV, x=position, params=params)
-    print(result.fit_report())
+    result = mod.fit(
+        data=np.log(energy/MeV), x=position, params=params)
 
     v = result.params.valuesdict()
-    print(v['c0'])
-    print(v['c1'])
-    print(v['c2'])
-
     x_fit = np.linspace(position[0], position[-1], 200)
 
-    fig = plot.figure(figsize=(244.0/72, 120.0/72))
+    common.setup_plot()
+
+    fig = plot.figure(figsize=np.array(conf['Plot']['FigSize'])/72)
     ax = fig.add_subplot(1, 1, 1)
 
+    axes = [get_axis(aeval, *conf['Plot'][x]) for x in ['XAxis', 'YAxis']]
 
     ax.semilogy(
-        x_fit/mm, result.eval(x=x_fit), linewidth=0.6)
+        x_fit/axes[0].unit, np.exp(result.eval(x=x_fit)), linewidth=0.6)
 
     ax.semilogy(
-        position/mm, energy/MeV, marker='.', ls='', markersize=0.001,
+        position/axes[0].unit, energy/axes[1].unit,
+        marker='.', ls='', markersize=2.0, markeredgewidth=0,
         color='k')
 
-    ax.text(
-        0.05, 0.8,
-        r'$E(z_s)/{\rm MeV} = \exp (c_0 + c_1 z_s + c_2 z_s^2)$',
-        fontsize=7.0,
-        transform=ax.transAxes)
+    aeval.symtable['fitval'] = v
+    aeval.symtable['num2tex'] = num2tex
+    plot_annotation(ax, aeval, conf['Plot'])
 
-    text = r'$c_0 = {:.3}$'.format(v['c0']) + '\n'
-    text += r'$c_1 = {:.3}'.format(num2tex(v['c1'] * mm))
-    text += r'\;{\rm mm}^{-1}$' + '\n'
-    text += r'$c_2 = {:.3}'.format(num2tex(v['c2'] * mm**2))
-    text += r'\;{\rm mm}^{-2}$' + '\n'
-    print(text)
-    ax.text(0.5, 0.2, text, transform=ax.transAxes)
+    ax.set_xlabel(axes[0].label, labelpad=-1.0)
+    ax.set_ylabel(axes[1].label, labelpad=2.0)
 
-    ax.set_xlabel(r'$z_s$ (mm)', labelpad=-1.0)
-    ax.set_ylabel(r"Energy (MeV)", labelpad=2.0)
-    # ax.set_xlim(0, 250)
-    ax.set_ylim(0.1, 20)
+    ax.set_xlim(*axes[0].xlim)
+    ax.set_ylim(*axes[1].xlim)
     ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
 
-    filename = 'out/energy-scale.pdf'
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    filename = conf['Files']['PlotOutput']
+    path = os.path.dirname(filename)
+    if path != '':
+        os.makedirs(path, exist_ok=True)
     plot.savefig(filename, transparent=True)
+
+    if 'CalcOutput' in conf['Files']:
+        filename = conf['Files']['CalcOutput']
+        path = os.path.dirname(filename)
+        if path != '':
+            os.makedirs(path, exist_ok=True)
+        calc_output = {
+            'EnergyScaleCoefficients' :
+            { 'c0' : float(v['c0']),
+              'c1' : float(v['c1']*mm),
+              'c2' : float(v['c2']*mm**2),
+              'c3' : float(v['c3']*mm**3) } }
+        with open(filename, 'w') as fout:
+            toml.dump(calc_output, fout)
 
 if __name__ == '__main__':
     sys.exit(main())

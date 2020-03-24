@@ -3,40 +3,45 @@ import os, sys
 import argparse
 import numpy as np
 import toml
-from collections import namedtuple
 import h5py
+import tqdm
 import scipy.spatial as spatial
 from scipy.optimize import minimize_scalar
 from scipy.interpolate import LinearNDInterpolator
 from scipy.interpolate import NearestNDInterpolator
 from scipy.interpolate import interp1d
-from scipy.linalg import norm
+from scipy.interpolate import RegularGridInterpolator
+from scipy.integrate import ode
+from scipy.linalg import norm, inv
+from scipy.ndimage.interpolation import shift
+from shapely.geometry import LinearRing
 from OCC.Core.BRep import *
 from OCC.Core.BRepAlgoAPI import *
 from OCC.Core.BRepBuilderAPI import *
-from OCC.Core.BRepFeat import *
 from OCC.Core.BRepMesh import *
+from OCC.Core.BRepOffsetAPI import *
 from OCC.Core.BRepPrimAPI import *
+from OCC.Core.BRepTools import *
 from OCC.Core.GC import *
 from OCC.Core.GeomAPI import *
 from OCC.Core.gp import *
-from OCC.Core.Interface import *
+from OCC.Core.Message import *
 from OCC.Core.STEPControl import *
 from OCC.Core.StlAPI import *
 from OCC.Core.TColgp import *
 from OCC.Core.TopoDS import *
+from OCC.Core.TopTools import *
 from scipy.ndimage import gaussian_filter
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plot
-from matplotlib.backends.backend_pdf import PdfPages
-import numpy as np
 from Geant4.hepunit import *
 import pbpl.common as common
+import pbpl.compton as compton
 
 # Use mm internally for length scale.  OpenCascade internally also uses mm=1.0,
 # so don't bother converting lengths when sending/receiving from OpenCascade.
 assert(mm == 1.0)
+
+fmt = ('{desc:>40s}:{percentage:3.0f}% ' +
+       '|{bar}| {n_fmt:>6s}/{total_fmt:<6s}')
 
 def get_parser():
     parser = argparse.ArgumentParser(
@@ -67,127 +72,17 @@ def collect(items):
     return result
 
 def build_slab(conf):
-    p0 = np.array(conf['Dimensions']['p0'])*mm
-    p1 = np.array(conf['Dimensions']['p1'])*mm
-    slab0 = BRepPrimAPI_MakeBox(gp_Pnt(*p0), gp_Pnt(*p1)).Shape()
-
-    translation = np.array(conf['CollimatorTransformation']['Translation'])*mm
-    rotation = np.array(conf['CollimatorTransformation']['Rotation'])*deg
-
-    quaternion = gp_Quaternion()
-    quaternion.SetEulerAngles(gp_Extrinsic_ZYZ, *rotation)
+    volume = np.array(conf['Slab']['Volume'])*mm
+    slab = BRepPrimAPI_MakeBox(
+        gp_Pnt(*volume.T[0]), gp_Pnt(*volume.T[1])).Shape()
+    M = compton.build_transformation(conf['Slab']['Transformation'], mm, deg)
     transform = gp_Trsf()
-    transform.SetTransformation(quaternion, gp_Vec(*translation))
-    return BRepBuilderAPI_Transform(slab0, transform).Shape()
-
-def gen_lattice_points(a, xlim, ylim):
-    a1 = a*np.array((1.0, 0))
-    a2 = a*np.array((0.5, 0.5*np.sqrt(3)))
-    points = []
-    for i in range(-10, 200):
-        for j in range(-100, 100):
-            points.append(i*a1 + j*a2)
-    points = np.array(points)
-    xin_mask = np.logical_and(points[:,0]>=xlim[0], points[:,0]<=xlim[1])
-    yin_mask = np.logical_and(points[:,1]>=ylim[0], points[:,1]<=ylim[1])
-    mask = np.logical_and(xin_mask, yin_mask)
-    return points[mask]
-
-def calculate_pole_mask(conf, lattice, r):
-    b1 = conf['Dimensions']['pole_b1']*mm
-    c0 = conf['Dimensions']['pole_c0']*mm
-    a0 = c0*(3*(b1/c0)**2-1)**(1/3)
-    def min_distance_to_curve(p):
-        def fmin(y):
-            p0 = p[1:3]
-            p1 = np.array((y, np.sqrt((y**3+a0**3)/(3*y))))
-            return norm(p0-p1)
-        result = minimize_scalar(
-            fmin, bounds=(5*mm, 125*mm), method='bounded').fun
-        return result
-    min_distance_to_curve = np.vectorize(
-        min_distance_to_curve, signature='(3)->()')
-    return min_distance_to_curve(lattice) > r
-
-def build_pores(conf, homing_map, hull):
-    a = conf['Pores']['a']*mm
-    r = conf['Pores']['r']*a
-    z0 = conf['Pores']['z0']*mm
-    lz = conf['Pores']['lz']*mm
-    ly = conf['Pores']['ly']*mm
-    p0 = np.array(conf['Dimensions']['p0'])*mm
-
-    zy_lattice = gen_lattice_points(a, (0, lz), (0, 0.5*ly))
-    zy_lattice += np.array((z0, 0))
-    # zy --> xyz
-    lattice = np.hstack(
-        (p0[0]*np.ones((len(zy_lattice), 1)), np.flip(zy_lattice, axis=1)))
-
-    # retain only lattice points within convex hull of CST trajectories
-    delaunay = spatial.Delaunay(hull.points)
-    lattice = lattice[delaunay.find_simplex(lattice[:,1:3])>=0]
-    homing = homing_map(lattice[:,1:3])
-
-    # transform lattice to collimator's entrance plane
-    translation = np.array(conf['CollimatorTransformation']['Translation'])*mm
-    euler = np.array(conf['CollimatorTransformation']['Rotation'])*deg
-    rotation = spatial.transform.Rotation.from_euler('zyz', euler).as_dcm()
-    lattice = (rotation @ lattice.T).T + translation
-
-    pole_mask = calculate_pole_mask(conf, lattice, a)
-    lattice = lattice[pole_mask]
-    homing = homing[pole_mask]
-
-    cos_theta = homing.T[0]
-    phi = homing.T[1]
-
-    mask = cos_theta>0.6
-    lattice = lattice[mask]
-    cos_theta = cos_theta[mask]
-    sin_theta = np.sqrt(1-cos_theta**2)
-    phi = phi[mask]
-
-    # yzx -> xyz
-    nhat = np.array(
-        (cos_theta, sin_theta * np.cos(phi), sin_theta * np.sin(phi))).T
-
-    nhat = (rotation @ nhat.T).T
-    nscint = (rotation @ np.array((1,0,0)))
-
-    reflected_lattice = []
-    reflected_nhat = []
-    for i, (p, n) in enumerate(zip(lattice, nhat)):
-        if np.abs(p[1]) < 0.1*a:
-            p[1] = 0.0
-            n[1] = 0.0
-            lattice[i] = p
-            nhat[i] = n
-            continue
-        reflected_lattice.append(np.array((p[0], -p[1], p[2])))
-        reflected_nhat.append(np.array((n[0], -n[1], n[2])))
-    lattice = np.concatenate((lattice, np.array(reflected_lattice)))
-    nhat = np.concatenate((nhat, np.array(reflected_nhat)))
-
-    cutter = TopoDS_CompSolid()
-    bilda = BRep_Builder()
-#    cutter = TopoDS_Compound()
-#    bilda.MakeCompound(cutter)
-    bilda.MakeCompSolid(cutter)
-
-    for p, n in zip(lattice, nhat):
-        circle = GC_MakeCircle(
-            gp_Ax2(gp_Pnt(*(p-n*20*mm)), gp_Dir(*nscint)), r)
-        edge = BRepBuilderAPI_MakeEdge(circle.Value()).Edge()
-        wire = BRepBuilderAPI_MakeWire(edge)
-        face = BRepBuilderAPI_MakeFace(wire.Wire())
-        cylinder = BRepPrimAPI_MakePrism(face.Shape(), gp_Vec(*(n*50*mm)))
-        bilda.Add(cutter, cylinder.Shape())
-    return cutter
-
+    transform.SetValues(*M.flatten()[:12])
+    return BRepBuilderAPI_Transform(slab, transform).Shape()
 
 def build_upperpole(conf):
-    b1 = conf['Dimensions']['pole_b1']*mm
-    c0 = conf['Dimensions']['pole_c0']*mm
+    b1 = conf['Slab']['magnet_b1']*mm
+    c0 = conf['Slab']['magnet_c0']*mm
 
     a0 = c0*(3*(b1/c0)**2-1)**(1/3)
     y = np.arange(c0-1*mm, 126.001*mm, 1*mm)
@@ -210,7 +105,7 @@ def build_upperpole(conf):
 
     return extrusion.Shape()
 
-def build_pole(conf):
+def build_magnet(conf):
     upper = build_upperpole(conf)
     ymirror = gp_Trsf()
     ymirror.SetMirror(gp_ZOX())
@@ -222,205 +117,296 @@ def build_pole(conf):
     builder.Add(pole, lower)
     return pole
 
-def build_collimator(conf, homing_map, hull):
+
+def build_pores(conf, lattice):
+    cutter = TopoDS_Compound()
+    bilda = BRep_Builder()
+    bilda.MakeCompound(cutter)
+
+    grid = np.array(conf['Slab']['Volume'])*mm
+    x_cs = np.linspace(grid[0,0], grid[0,1], conf['Pores']['NumCrossSections'])
+    wall = conf['Pores']['wall']*mm
+
+    for i, q in tqdm.tqdm(list(
+            enumerate(lattice)), bar_format=fmt, desc='Cutting pores'):
+
+#        print(i, len(lattice))
+        pore = BRepOffsetAPI_ThruSections(True, False)
+        for x in x_cs:
+            # BRepOffsetAPI_MakeOffsetShape is suuuuuuuper sloooooooow.
+            # Instead, use Shapely to shrink pore cross section.
+            ring = []
+            for trajectory in q:
+                ring.append(trajectory(x))
+            ring = LinearRing(ring)
+            pore_coords = np.array(
+                ring.parallel_offset(0.5*wall, 'right', join_style=2))[:-1]
+
+            polygon = BRepBuilderAPI_MakePolygon()
+            for coord in pore_coords:
+                polygon.Add(gp_Pnt(x, *coord))
+            polygon.Close()
+            pore.AddWire(polygon.Wire())
+        pore.Build()
+        if pore.Shape() is not None:
+            bilda.Add(cutter, pore.Shape())
+
+    M = compton.build_transformation(conf['Slab']['Transformation'], mm, deg)
+    transform = gp_Trsf()
+    transform.SetValues(*M.flatten()[:12])
+    return BRepBuilderAPI_Transform(cutter, transform).Shape()
+
+def build_chamfer(conf):
+    x0 = conf['Chamfer']['x0']*mm
+    result = BRepPrimAPI_MakeBox(
+        gp_Pnt(0.0, -1000.0, 0.0),
+        gp_Pnt(x0, 1000.0, 1000.0))
+    return result.Shape()
+
+def build_collimator(conf, lattice):
     slab = build_slab(conf)
-    pole = build_pole(conf)
-    pores = build_pores(conf, homing_map, hull)
-    cut_slab = BRepAlgoAPI_Cut(slab, pole).Shape()
-    cut_pores = BRepAlgoAPI_Cut(cut_slab, pores).Shape()
-    return cut_pores
+    magnet = build_magnet(conf)
+    result = BRepAlgoAPI_Cut(slab, magnet).Shape()
+    pores = build_pores(conf, lattice)
 
-def scale_limits(ax, scale):
-    lim = ax.get_view_interval()
-    mean = 0.5*(lim[0]+lim[1])
-    width = lim[1]-lim[0]
-    new_width = scale*width
-    ax.set_view_interval(mean-0.5*new_width, mean+0.5*new_width)
+    # cutter = BRepAlgoAPI_Cut()
+    # L1 = TopTools_ListOfShape()
+    # L1.Append(result)
+    # L2 = TopTools_ListOfShape()
+    # L2.Append(pores)
+    # cutter.SetArguments(L1)
+    # cutter.SetTools(L2)
+    # cutter.SetRunParallel(True)
+    # cutter.Build()
+    # result = cutter.Shape()
 
-def get_energy(gin):
-    m0 = gin['m0'][()]*kg
-    p0 = gin['p'][0]*m0*c_light
-    E0 = np.sqrt(norm(p0)**2*c_light**2 + m0**2*c_light**4)
-    KE = E0 - m0*c_light**2
-    return KE
-
-TrajectoryMapping = namedtuple(
-    'TrajectoryMapping', 'group energy y0 y1 ymap zmap xi phi')
-
-def analyze_trajectories(conf, fin):
-    result = []
-    translation = -np.array(
-        conf['ScintillatorTransformation']['Translation'])*mm
-    euler = -np.array(conf['ScintillatorTransformation']['Rotation'])*deg
-    rotation = spatial.transform.Rotation.from_euler('zyz', euler).as_dcm()
-    p0 = np.array(conf['Dimensions']['p0'])*mm
-    p1 = np.array(conf['Dimensions']['p1'])*mm
-    for group_name, gin in fin.items():
-        energy = get_energy(gin)
-        x = gin['x'][:]*meter
-
-        # transform from scintillator entrance plane to YZ plane
-        xt = (rotation @ (x+translation).T).T
-
-        # CST trajectories penetrate about 100um into scintillator
-        if np.abs(xt[-1,0]-1*mm)>1*mm:
-            # These trajectories terminated outside of the scintillator
-            # entrance plane.  Mostly, these were low energy trajectories
-            # that deflected strongly without hitting scintillator.
-            continue
-
-        i1 = np.argmax(xt[:,0]>p0[0])
-        assert(i1 != 0)
-
-        i0 = i1-1
-        xit = np.concatenate(
-            ([p0[0]], interp1d(xt[i0:i1+1,0], xt[i0:i1+1,1:3].T)(p0[0])))
-        xi = (rotation.T @ xit) - translation
-        xf = x[-1]
-        xft = xt[-1]
-        nhat = xft-xit
-        nhat = nhat / norm(nhat)
-        # xyz -> yzx
-        xi = nhat[0]
-        phi = np.arctan2(nhat[2], nhat[1])
-        result.append(
-            TrajectoryMapping(
-                group=group_name, energy=energy, y0=x[0,1], y1=x[-1,1],
-                ymap=xit[1], zmap=xit[2], xi=xi, phi=phi))
+    result = BRepAlgoAPI_Cut(result, pores).Shape()
+    if 'Chamfer' in conf:
+        chamfer = build_chamfer(conf)
+        result = BRepAlgoAPI_Cut(result, chamfer).Shape()
     return result
 
-def create_homing_map(mappings):
-    energy_map = {}
-    for m in mappings:
-        if m.energy not in energy_map:
-            energy_map[m.energy] = []
-        energy_map[m.energy].append(m)
+def calc_vectorfield(conf):
+    M = compton.build_transformation(conf['Slab']['Transformation'], mm, deg)
+    M = inv(M)
+    grid = np.array(conf['Slab']['Volume'])*mm
+    dx = np.array(conf['VectorField']['GridResolution'])*mm
 
-    for m in energy_map.values():
-        A = np.array([x.y1 for x in m])
-        diff = A[1:] - A[:-1]
-        i_decrease = np.argmax(diff < 0)
-        if i_decrease == 0:
-            continue
-        del m[i_decrease+1:]
+    result = []
+    with h5py.File(conf['VectorField']['Input'], 'r') as fin:
+        for group_name, gin in tqdm.tqdm(
+                fin.items(), bar_format=fmt, desc='Reading trajectories'):
 
-    position = []
-    data = []
-    for m in mappings:
-        position.append(np.array((m.ymap, m.zmap)))
-        data.append(np.array((m.xi, m.phi)))
-    position = np.array(position)
-    data = np.array(data)
-    linear_interp = LinearNDInterpolator(position, data)
-    nearest_interp = NearestNDInterpolator(position, data)
-    hull = spatial.ConvexHull(position)
+            x = gin['x'][:]*meter
+            Mx = np.array([compton.transform(M, q) for q in x])
+            grid_mask = compton.in_volume(grid, Mx)
+            grid_mask += shift(grid_mask, -10) + shift(grid_mask, 1)
+            Mx = Mx[grid_mask].copy()
+            delta = np.diff(Mx, axis=0)
+            n = delta/norm(delta, axis=1, keepdims=True)
+            result.append(np.array((Mx[:-1], n)))
+    x, n = np.hstack(result)
+    mirror_x = x * np.array((1,-1,1))
 
-    mesh_dx = 0.5*mm
-    sigma_mesh = 5*mm
+    bar = tqdm.tqdm(
+        total=4, bar_format=fmt, desc='Creating smooth vectorfield')
+    delaunay = spatial.Delaunay(np.concatenate((x, mirror_x)))
+    bar.update(1)
+    nearest_interp = NearestNDInterpolator(x, n)
+    linear_interp = LinearNDInterpolator(x, n)
+    bar.update(1)
+    epsilon = 0.1*dx
+    dims = [np.arange(grid[q,0], grid[q,1]+epsilon, dx) for q in [0,1,2]]
 
-    Y, Z = np.meshgrid(
-        np.arange(
-            hull.min_bound[0]-mesh_dx, hull.max_bound[0]+mesh_dx, mesh_dx),
-        np.arange(
-            hull.min_bound[1]-mesh_dx, hull.max_bound[1]+mesh_dx, mesh_dx))
-    A = np.array((Y, Z))
-    A = np.rollaxis(A, 0, 3)
+    # Use linear interpolation within convex hull, else use nearest-neighbor.
+    X, Y, Z = np.meshgrid(*dims, indexing='ij')
+    n_XYZ = linear_interp((X, np.abs(Y), Z))
+    bar.update(1)
+    n_XYZ_nearest = nearest_interp((X, np.abs(Y), Z))
+    bar.update(1)
+    bar.close()
+    mask = np.isnan(n_XYZ)
+    n_XYZ[mask] = n_XYZ_nearest[mask]
+    n_XYZ[Y<0] *= np.array((1,-1,1))
 
-    xi = linear_interp(A)[:,:,0]
-    mask = np.isnan(xi)
-    xi[mask] = nearest_interp(A)[mask,0]
-    smoothed_xi = gaussian_filter(xi, sigma_mesh/mesh_dx, mode='nearest')
+    if 'DiagnosticOutput' in conf['VectorField']:
+        with h5py.File(conf['VectorField']['DiagnosticOutput'], 'w') as fout:
+            fout['nx'] = n_XYZ[:,:,:,0]
+            fout['ny'] = n_XYZ[:,:,:,1]
+            fout['nz'] = n_XYZ[:,:,:,2]
 
-    phi = linear_interp(A)[:,:,1]
-    phi[mask] = nearest_interp(A)[mask,1]
-    smoothed_phi = gaussian_filter(phi, sigma_mesh/mesh_dx, mode='nearest')
+    interpolator = RegularGridInterpolator(
+        dims, n_XYZ, bounds_error=False, fill_value=None)
+    return interpolator, delaunay
 
-    smooth_interp = LinearNDInterpolator(
-        np.array((Y.ravel(), Z.ravel())).T,
-        np.array((smoothed_xi.ravel(), smoothed_phi.ravel())).T)
+def gen_lattice_points(a, xlim, ylim):
+    a1 = a*np.array((1.0, 0))
+    a2 = a*np.array((0.5, 0.5*np.sqrt(3)))
+    points = []
+    for i in range(-10, 250):
+        for j in range(-100, 100):
+            points.append(i*a1 + j*a2)
+    points = np.array(points)
+    xin_mask = np.logical_and(points[:,0]>=xlim[0], points[:,0]<=xlim[1])
+    yin_mask = np.logical_and(points[:,1]>=ylim[0], points[:,1]<=ylim[1])
+    mask = np.logical_and(xin_mask, yin_mask)
+    return points[mask]
 
-    return smooth_interp, hull
+def calc_trajectory(interpolator, y0, max_length):
+    def yprime(t, y):
+        dy = interpolator(y)
+        return dy
+    solver = ode(yprime)
+    solver.set_integrator('dopri5')
+    solver.set_initial_value(y0)
+    trajectory = []
+    dt = 1*mm
+    curr_t = 0.0
+    while 1:
+        curr_t += dt
+        trajectory.append(solver.integrate(curr_t))
+        if curr_t >= max_length:
+            return None
+        if solver.y[0] > 0:
+            break
+    trajectory = np.array(trajectory)
+    result = interp1d(
+        trajectory.T[0], trajectory.T[1:3],
+        bounds_error=False, fill_value='extrapolate')
+    return result
+
+def calculate_pole_mask(conf, lattice, r):
+    b1 = conf['Slab']['magnet_b1']*mm
+    c0 = conf['Slab']['magnet_c0']*mm
+    a0 = c0*(3*(b1/c0)**2-1)**(1/3)
+    lattice = lattice.copy()
+    lattice[:,1] = np.abs(lattice[:,1])
+
+    def below_curve(p):
+        y, z = p[1:3]
+        if y == 0:
+            return True
+        else:
+            return z<np.sqrt((y**3+a0**3)/(3*y))
+    below_curve = np.vectorize(
+        below_curve, signature='(3)->()')
+
+    def min_distance_to_curve(p):
+        def fmin(y):
+            p0 = p[1:3]
+            p1 = np.array((y, np.sqrt((y**3+a0**3)/(3*y))))
+            return norm(p0-p1)
+        result = minimize_scalar(
+            fmin, bounds=(1*mm, 150*mm), method='bounded').fun
+        return result
+    min_distance_to_curve = np.vectorize(
+        min_distance_to_curve, signature='(3)->()')
+
+    return np.logical_and(
+        below_curve(lattice), min_distance_to_curve(lattice) > r)
 
 
-def plot_homing_map(filename, homing_map, hull):
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    output = PdfPages(filename)
-    common.setup_plot()
-    plot.rc('figure.subplot', right=0.99, top=0.99, bottom=0.09, left=0.10)
+def calc_lattice(conf, interpolator, delaunay):
+    bar = tqdm.tqdm(
+        total=2, bar_format=fmt, desc='Creating pore lattice')
+    pore_conf = conf['Pores']
+    a = pore_conf['a']*mm
+    delta_z = pore_conf['delta_z']*mm
+    z0 = pore_conf['z0']*mm
+    lz = pore_conf['lz']*mm
+    ly = pore_conf['ly']*mm
+    magnet_buffer = pore_conf['MagnetBuffer']*mm
+    max_length = pore_conf['MaxLength']*mm
+    volume = np.array(conf['Slab']['Volume'])*mm
+    M = compton.build_transformation(conf['Slab']['Transformation'], mm, deg)
 
-    mesh_dx = 0.5*mm
+    zy_lattice = gen_lattice_points(a, (0, lz), (-0.5*ly, 0.5*ly))
+    zy_lattice += np.array((delta_z, 0))
+    # zy --> xyz
+    tri_lattice = np.hstack(
+        (volume[0,0]*np.ones((len(zy_lattice), 1)),
+         np.flip(zy_lattice, axis=1)))
 
-    Y, Z = np.meshgrid(
-        np.arange(
-            hull.min_bound[0]-mesh_dx, hull.max_bound[0]+mesh_dx, mesh_dx),
-        np.arange(
-            hull.min_bound[1]-mesh_dx, hull.max_bound[1]+mesh_dx, mesh_dx))
-    smoothed_xi = homing_map(Y, Z)[:,:,0]
-    smoothed_phi = homing_map(Y, Z)[:,:,1]
+    tri_lattice = tri_lattice[tri_lattice[:,2] > z0]
+    tri_lattice = tri_lattice[delaunay.find_simplex(tri_lattice)>=0]
+    bar.update(1)
+    M_tri_lattice = np.array([compton.transform(M, q) for q in tri_lattice])
 
-    fig = plot.figure(figsize=(244/72, 100/72))
-    ax = fig.add_subplot(1, 1, 1, aspect=1.0)
-    ax.contour(
-        Z/mm, Y/mm, smoothed_xi, levels=np.linspace(-1.0, 1.0, 20),
-        linewidths=0.3, colors='#0083b8',
-        linestyles='solid', zorder=0)
-    ax.fill(
-        hull.points[hull.vertices,1]/mm,
-        hull.points[hull.vertices,0]/mm,
-        fill=False, linewidth=0.5, edgecolor='k', zorder=10)
-    scale_limits(ax.xaxis, 1.1)
-    scale_limits(ax.yaxis, 1.1)
-    plot.title(r'$\xi(z, y)$')
-    plot.xlabel(r'$z_{\rm scint}$ (mm)', labelpad=0.0)
-    plot.ylabel(r'$y_{\rm scint}$ (mm)', labelpad=0.0)
-    ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-    ax.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-    output.savefig(fig, transparent=True)
+    # discard lattice points within a given distance from magnet pole
+    tri_lattice = tri_lattice[
+        calculate_pole_mask(conf, M_tri_lattice, magnet_buffer)]
+    bar.update(1)
+    bar.close()
 
-    fig = plot.figure(figsize=(244/72, 100/72))
-    ax = fig.add_subplot(1, 1, 1, aspect=1.0)
-    ax.contour(
-        Z/mm, Y/mm, smoothed_phi, levels=20,
-        linewidths=0.3, colors='#0083b8',
-        linestyles='solid', zorder=0)
-    ax.fill(
-        hull.points[hull.vertices,1]/mm,
-        hull.points[hull.vertices,0]/mm,
-        fill=False, linewidth=0.5, edgecolor='k', zorder=10)
-    scale_limits(ax.xaxis, 1.1)
-    scale_limits(ax.yaxis, 1.1)
-    plot.title(r'$\phi(z, y)$')
-    plot.xlabel(r'$z_{\rm scint}$ (mm)', labelpad=0.0)
-    plot.ylabel(r'$y_{\rm scint}$ (mm)', labelpad=0.0)
-    ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-    ax.yaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-    output.savefig(fig, transparent=True)
-    output.close()
+    hex_lattice = {}
+    N = 6
+    phi = (30*deg) + np.linspace(0, 2*np.pi, N, endpoint=False)
+    hex_coords = (a/np.sqrt(3))*np.array(
+        (np.zeros_like(phi), np.sin(phi), np.cos(phi))).T
+
+    # integrate hexagonal lattice through vectorfield
+    for i, p in tqdm.tqdm(list(
+            enumerate(tri_lattice)), bar_format=fmt,
+            desc='Integrating lattice trajectories'):
+        for q in hex_coords:
+            coord = p+q
+            key = (round(coord[1], 3), round(coord[2], 3))
+            if key in hex_lattice:
+                continue
+            if delaunay.find_simplex(coord) == -1:
+                # hex lattice point is outside trajectory hull
+                hex_lattice[key] = None
+                continue
+            trajectory = calc_trajectory(interpolator, coord, max_length)
+            if trajectory == None:
+                # trajectory didn't cross x=0 plane
+                hex_lattice[key] = None
+                continue
+            hex_lattice[key] = trajectory
+
+    # assemble result
+    result = []
+    for p in tri_lattice:
+        valid_hex = True
+        trajectories = []
+        for q in hex_coords:
+            coord = p+q
+            key = (round(coord[1], 3), round(coord[2], 3))
+            if hex_lattice[key] == None:
+                valid_hex = False
+                break
+            trajectories.append(hex_lattice[key])
+        if valid_hex:
+            result.append(trajectories)
+    return result
 
 
 def main():
     args = get_args()
     conf = args.conf
 
-    with h5py.File(conf['Files']['Input'], 'r') as fin:
-        mappings = analyze_trajectories(conf, fin)
-        homing_map, hull = create_homing_map(mappings)
-        if 'DiagnosticOutput' in conf['Files']:
-            plot_homing_map(
-                conf['Files']['DiagnosticOutput'], homing_map, hull)
+    interpolator, delaunay = calc_vectorfield(conf)
+    lattice = calc_lattice(conf, interpolator, delaunay)
+    collimator = build_collimator(conf, lattice)
 
-    collimator = build_collimator(conf, homing_map, hull)
-
-    if 'STEPOutput' in conf['Files']:
-        step_writer = STEPControl_Writer()
-        step_writer.Transfer(collimator, STEPControl_AsIs)
-        status = step_writer.Write(conf['Files']['STEPOutput'])
-
-    if 'STLOutput' in conf['Files']:
-        mesh = BRepMesh_IncrementalMesh(collimator, 1.0, True, 20*deg, True)
-        stl_writer = StlAPI_Writer()
-        stl_writer.SetASCIIMode(False)
-        stl_writer.Write(collimator, conf['Files']['STLOutput'])
+    for outconf in conf['Output']:
+        filename = outconf['Filename']
+        path = os.path.dirname(filename)
+        if path != '':
+            os.makedirs(path, exist_ok=True)
+        if outconf['Type'] == 'STL':
+            # clear out any existing mesh
+            breptools_Clean(collimator)
+            mesh = BRepMesh_IncrementalMesh(
+                collimator, outconf['LinearDeflection']*mm,
+                outconf['IsRelative'], outconf['AngularDeflection']*deg, True)
+            stl_writer = StlAPI_Writer()
+            stl_writer.SetASCIIMode(False)
+            stl_writer.Write(collimator, filename)
+        elif outconf['Type'] == 'STEP':
+            step_writer = STEPControl_Writer()
+            step_writer.Transfer(collimator, STEPControl_AsIs)
+            status = step_writer.Write(filename)
 
     return 0
 

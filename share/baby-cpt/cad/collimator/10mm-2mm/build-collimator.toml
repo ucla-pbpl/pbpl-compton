@@ -1,0 +1,40 @@
+[Slab]
+Transformation = [
+   ['TranslateZ', 'RotateY', 'TranslateX'],
+   [10.0, 28.0, 40.0]]
+Volume = [[-10.0, 0.0], [-75.0, 75.0], [0.0, 225.0]]
+magnet_b1 = 235.0
+magnet_c0 = 15.0
+
+[VectorField]
+Input = '../../../map/4500A.h5'
+GridResolution = 0.2  # (mm)
+#DiagnosticOutput = 'vector-field.h5'
+
+[Pores]
+a = 2.0        # lattice constant (mm)
+wall = 0.4     # wall thickness (mm)
+delta_z = 0.0
+z0 = 10.0
+lz = 225.0
+ly = 120.0
+MagnetBuffer = 5.0   # pore culling distance (mm)
+MaxLength = 20.0
+NumCrossSections = 20
+
+[Chamfer]
+x0 = 37.5
+
+[[Output]]
+Type = 'STL'
+LinearDeflection = 0.05   # mm
+IsRelative = false
+AngularDeflection = 10.0  # deg
+Filename = 'fine.stl'
+
+[[Output]]
+Type = 'STL'
+LinearDeflection = 0.1    # mm
+IsRelative = false
+AngularDeflection = 20.0  # deg
+Filename = 'coarse.stl'

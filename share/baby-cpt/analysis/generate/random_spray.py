@@ -71,7 +71,7 @@ def gamma_spray(total, desc):
     else:
         Y_command_index = tag.find("Y")-1
         E_command_index = tag.find("E")-1
-        if (tag.len != 4 or Y_command_index<0 or E_command_index<0 ):
+        if (len(tag) != 4 or Y_command_index<0 or E_command_index<0 ):
             print ("Illegal tag")
             return
         else:
