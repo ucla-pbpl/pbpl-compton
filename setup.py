@@ -99,6 +99,7 @@ of FACET-II gamma diagnostics',
          'pbpl-compton-plot-deposition = pbpl.compton.plot_deposition:main',
          'pbpl-compton-build-collimator = pbpl.compton.build_collimator:main',
          'pbpl-compton-calc-map-particles = pbpl.compton.calc_map_particles:main',
+         'pbpl-compton-test-plugin-mpi = pbpl.compton.test_plugin_mpi:main',
         ]
     },
     data_files=[

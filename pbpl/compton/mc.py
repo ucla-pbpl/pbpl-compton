@@ -362,8 +362,7 @@ def create_event_actions(conf):
         result[name] = action
     return result
 
-def main():
-    args = get_args()
+def run_main(args):
 
     global random_engine
     random_engine = g4.RanecuEngine()
@@ -412,6 +411,10 @@ def main():
         sd.finalize(num_events)
 
     return 0
+
+def main():
+    args = get_args()
+    run_main(args)
 
 if __name__ == '__main__':
     sys.exit(main())
