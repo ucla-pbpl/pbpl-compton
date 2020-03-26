@@ -4,16 +4,18 @@ import matplotlib.pyplot as plt
 import glob
 import os
 
-x_max = 245#= np.max(points[:, 0])+1
+x_max = 250#= np.max(points[:, 0])+1
 #print(x_max)
-x_bins = int(x_max/2)
-y_max = 156 #= np.max(points[:, 1])+1
+x_bins = 128
+y_max = 150 #= np.max(points[:, 1])+1
 #print(y_max)
 y_bins = 128
     
 def get_image(points, energy):
     try:
-        zi, xi, yi = np.histogram2d(points[:,0].flatten(), points[:,1].flatten(), bins=(x_bins, y_bins), weights=energy, normed=False, range=[[0, x_max], [-y_max, y_max]])
+        zi, xi, yi = np.histogram2d(points[:,0].flatten(), points[:,1].flatten(), 
+        bins=(x_bins, y_bins), weights=energy, normed=False, 
+        range=[[0, x_max], [-y_max, y_max]])
     except IndexError:
         return None
     return zi

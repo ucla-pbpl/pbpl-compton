@@ -43,13 +43,17 @@ def get_distrib_cosine(num, bins, lower, upper):
     return y
 
 
-def gamma_spray(total, desc):
+def gamma_spray(total, desc, y_bins, y_lower, y_upper, e_bins, e_lower, e_upper):
+    #first training
+    #y_bins=50
+    #y_lower = -29
+    #y_upper = 30
+    #e_bins=50
+    #e_lower, e_upper = 0.25, 25
+
     i=0
-    y_bins=50
-    y_lower = -29
-    y_upper = 30
-    e_bins=50
-    e_lower, e_upper = 0.25, 25
+    ln_e_lower = np.log(e_lower)
+    ln_e_upper = np.log(e_upper)
 
     get_distrib_func = {
         "r": get_distrib_random,
@@ -63,11 +67,15 @@ def gamma_spray(total, desc):
     tag = tags[0]
     #gYrE-col-2e7-KBYQ19-7
     if(tag == "triag"):
-        ye = triangle_spray.triangle_spray(y_bins, y_lower, y_upper, e_bins, e_lower, e_upper, total)
-        histo, _, _ = np.histogram2d(ye[:, 0], ye[:, 1], range=[[-29, 30],[0, 25]], bins=[50, 50])
+        ye = triangle_spray.triangle_spray(y_bins, y_lower, y_upper, e_bins, ln_e_lower, ln_e_upper, total)
+        histo, _, _ = np.histogram2d(ye[:, 0], ye[:, 1], 
+            range=[[y_lower, y_upper],[ln_e_lower, ln_e_upper]], 
+            bins=[y_bins, e_bins])
     elif (tag == "image"):
-        ye = image_spray.image_spray(y_bins, y_lower, y_upper, e_bins, e_lower, e_upper, total)
-        histo, _, _ = np.histogram2d(ye[:, 0], ye[:, 1], range=[[-29, 30],[0, 25]], bins=[50, 50])
+        ye = image_spray.image_spray(y_bins, y_lower, y_upper, e_bins, ln_e_lower, ln_e_upper, total)
+        histo, _, _ = np.histogram2d(ye[:, 0], ye[:, 1], 
+            range=[[y_lower, y_upper],[ln_e_lower, ln_e_upper]], 
+            bins=[y_bins, e_bins])
     else:
         Y_command_index = tag.find("Y")-1
         E_command_index = tag.find("E")-1
@@ -78,19 +86,12 @@ def gamma_spray(total, desc):
             yc = tag[Y_command_index]
             ec = tag[E_command_index]
             ys = get_distrib_func[yc](total, y_bins, y_lower, y_upper)
-            es = get_distrib_func[ec](total, e_bins, e_lower, e_upper)
-            histo, _, _ = np.histogram2d(ys, es, range=[[-29, 30],[0, 25]], bins=[50, 50])
+            es = get_distrib_func[ec](total, e_bins, ln_e_lower, ln_e_upper)
+            histo, _, _ = np.histogram2d(ys, es, 
+                range=[[y_lower, y_upper],[ln_e_lower, ln_e_upper]], 
+                bins=[y_bins, e_bins])
+            ye = np.column_stack((ys, es))
 
-            
-
-    #ys = get_ys(total)
-    #energies = get_energies(total)
-    #histo, _, _ = np.histogram2d(ys, energies, range=[[-29, 30],[0, 25]], bins=[50, 50])
-    #ye = triangle_spray.triangle_spray(y_bins, y_lower, y_upper, e_bins, e_lower, e_upper, total)
-    ye = image_spray.image_spray(y_bins, y_lower, y_upper, e_bins, e_lower, e_upper, total)
-    histo, _, _ = np.histogram2d(ye[:, 0], ye[:, 1], range=[[-29, 30],[0, 25]], bins=[50, 50])
-    #print("here once")
-    np.savez("{}.npz".format(desc), histo=histo)
     while i<total:
-        yield 'gamma', g4.G4ThreeVector(0, ye[i, 0]*mm,-25*mm), g4.G4ThreeVector(0,0,1), ye[i, 1]
+        yield 'gamma', g4.G4ThreeVector(0, ye[i, 0]*mm,-25*mm), g4.G4ThreeVector(0,0,1), np.exp(ye[i, 1])
         i=i+1

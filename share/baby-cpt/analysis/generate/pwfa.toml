@@ -26,40 +26,40 @@ Color = [1.0, 1.0, 1.0, 1.0]
 
 [Geometry.World.ComptonPoleTop]
 Type = 'CadMesh'
-File = '../../cad/pwfa.stl'
+File = '../../cad/yoke.stl'
 SolidName = 'cpt_pole:top'
 Material = 'G4_Fe'
 Color = [1.0, 1.0, 1.0, 1.0]
 
 [Geometry.World.ComptonPoleBottom]
 Type = 'CadMesh'
-File = '../../cad/pwfa.stl'
+File = '../../cad/yoke.stl'
 SolidName = 'cpt_pole:bottom'
 Material = 'G4_Fe'
 Color = [1.0, 1.0, 1.0, 1.0]
 
 [Geometry.World.Collimator]
 Type = 'CadMesh'
-File = '../../cad/collimator-12mm.stl'
+File = '../../cad/collimator/12mm-2mm/coarse.stl'
 Material = 'G4_W'
 Color = [0.8, 0.8, 0.8, 1.0]
 
 [Geometry.World.ComptonYoke]
 Type = 'CadMesh'
-File = '../../cad/pwfa.stl'
+File = '../../cad/yoke.stl'
 SolidName = 'cpt_yoke:right'
 Material = 'G4_Fe'
 Color = [1.0, 1.0, 1.0, 1.0]
 
 [Geometry.World.Coils]
 Type = 'CadMesh'
-File = '../../cad/pwfa-coils.stl'
+File = '../../cad/coils.stl'
 Material = 'G4_Cu'
 Color = [0.72, 0.45, 0.20, 1.0]
 
 # [Geometry.World.ComptonScint]
 # Type = 'CadMesh'
-# File = '../../cad/pwfa.stl'
+# File = '../../cad/yoke.stl'
 # SolidName = 'cpt_scint:right'
 # Material = 'G4_CESIUM_IODIDE'
 # Color = [0.082, 0.722, 0.859, 0.3]
