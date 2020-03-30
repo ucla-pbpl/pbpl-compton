@@ -3,15 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import glob
 import os
-
-x_max = 250#= np.max(points[:, 0])+1
-#print(x_max)
-x_bins = 128
-y_max = 150 #= np.max(points[:, 1])+1
-#print(y_max)
-y_bins = 128
+import argparse
+import toml
     
-def get_image(points, energy):
+def get_image(points, energy, x_bins, x_max, y_bins, y_max):
     try:
         zi, xi, yi = np.histogram2d(points[:,0].flatten(), points[:,1].flatten(), 
         bins=(x_bins, y_bins), weights=energy, normed=False, 
@@ -21,19 +16,45 @@ def get_image(points, energy):
     return zi
 
 def main():
-    train_dir = ['train-right-y/']
-    test_dir = 'test-right-y/'
-    data_file = 'set0-right-y-mixed-big.npz'
-    #e_threshold = 50
+    parser = argparse.ArgumentParser(
+        description='Preprocess raw data into training and testing sets.')
+    parser.add_argument("--train_dir", required=True, nargs="+", 
+        help="set where the training set comes from.")
+    parser.add_argument("--test_dir", required=True, nargs="+", 
+        help="set where the testing set comes from.")
+    parser.add_argument("--data_file", "-O", required=True,
+        help="set name of the file to save the training and testing sets in.")
+    parser.add_argument("--config", required=True,
+        help="the config toml file")
+    
+    args = parser.parse_args()
 
+    conf = toml.load(args.config)
+    train_dir = args.train_dir
+    test_dir = args.test_dir
+    data_file = args.data_file
+    #e_threshold = 50
+    l_y_bins = int(conf['PrimaryGenerator']['YBins'])
+    l_e_bins = int(conf['PrimaryGenerator']['EBins'])
+    x_max = int(conf['Simulation']['XMax'])
+    #print(x_max)
+    x_bins = int(conf['Simulation']['XBins'])
+    y_max = int(conf['Simulation']['YMax'])
+    #print(y_max)
+    y_bins = int(conf['Simulation']['YBins'])
+    
     train_files = []
     for dirname in train_dir:
-        train_files.extend(glob.glob(dirname+'*-col-*.h5'))
-    test_files = glob.glob(test_dir+'*-col-*.h5')
+        train_files.extend(glob.glob(dirname+'/*-col-*.h5'))
+    print(train_files)
+    test_files = []
+    for dirname in test_dir:
+        test_files.extend(glob.glob(dirname+'/*-col-*.h5'))
     train_data = np.empty([1, x_bins, y_bins])
-    train_labels = [np.linspace(0, 31, 50*50)]
+    train_labels = np.array([np.linspace(0, 31, l_e_bins*l_y_bins)])
+    print(train_labels.shape)
     test_data = np.empty([1, x_bins, y_bins])
-    test_labels = [np.linspace(0, 31, 50*50)]
+    test_labels = np.array([np.linspace(0, 31, l_e_bins*l_y_bins)])
 
     for tr_f in train_files:
         energy_label=[]
@@ -52,7 +73,7 @@ def main():
         #print(points.shape)
        
         
-        b_out = get_image(points, energy)
+        b_out = get_image(points, energy, x_bins, x_max, y_bins, y_max)
         #print(b_out.shape)
         if not (b_out is None):
             train_data = np.append(train_data, [b_out], axis=0)
@@ -78,7 +99,7 @@ def main():
         #print(points.shape)
        
         
-        b_out = get_image(points, energy)
+        b_out = get_image(points, energy, x_bins, x_max, y_bins, y_max)
         #print(b_out.shape)
         if not (b_out is None):
             test_data = np.append(test_data, [b_out], axis=0)

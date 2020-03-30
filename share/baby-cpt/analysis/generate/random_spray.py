@@ -91,6 +91,8 @@ def gamma_spray(total, desc, y_bins, y_lower, y_upper, e_bins, e_lower, e_upper)
                 range=[[y_lower, y_upper],[ln_e_lower, ln_e_upper]], 
                 bins=[y_bins, e_bins])
             ye = np.column_stack((ys, es))
+    
+    np.savez("{}.npz".format(desc), histo=histo)
 
     while i<total:
         yield 'gamma', g4.G4ThreeVector(0, ye[i, 0]*mm,-25*mm), g4.G4ThreeVector(0,0,1), np.exp(ye[i, 1])

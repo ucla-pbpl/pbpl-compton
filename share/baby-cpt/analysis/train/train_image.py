@@ -2,13 +2,15 @@ import numpy as np
 import tensorflow as tf
 import os
 import matplotlib.pyplot as plt
+import argparse
+import toml
 
-def build_model():
+def build_model(in_x, in_y, out_x, out_y):
     model = tf.keras.Sequential([
-        tf.keras.layers.Flatten(input_shape=(122, 128)),
-        tf.keras.layers.Dense(64*128, activation='relu'),
-        tf.keras.layers.Dense(64*64, activation='relu'),
-        tf.keras.layers.Dense(50*50)
+        tf.keras.layers.Flatten(input_shape=(in_x, in_y)),
+        tf.keras.layers.Dense(int(in_x/2*in_y), activation='relu'),
+        tf.keras.layers.Dense(int(in_x/2*in_y/2), activation='relu'),
+        tf.keras.layers.Dense(out_x*out_y)
     ])
 
     optimizer = tf.keras.optimizers.RMSprop(0.001)
@@ -20,7 +22,20 @@ def build_model():
 
 
 def main():
-    data_file = 'set0-right-y-mixed-big'
+    parser = argparse.ArgumentParser(
+        description='Train network based on data file')
+    parser.add_argument("--data_file_name", required=True, 
+        help="set where the training data comes from.")
+    parser.add_argument("--config", required=True, 
+        help="set dimensions of input and output data")
+    args = parser.parse_args()
+    conf = toml.load(args.config)
+    l_y_bins = int(conf['PrimaryGenerator']['YBins'])
+    l_e_bins = int(conf['PrimaryGenerator']['EBins'])
+    x_bins = int(conf['Simulation']['XBins'])
+    y_bins = int(conf['Simulation']['YBins'])
+
+    data_file = args.data_file_name
     train_examples = []
     train_labels = []
     test_examples = []
@@ -41,10 +56,10 @@ def main():
     test_dataset = test_dataset.batch(BATCH_SIZE)
 
 
-    model = build_model()
+    model = build_model(x_bins, y_bins, l_y_bins, l_e_bins)
     print(model.summary())
 
-    checkpoint_path = "models/col-right-y-mixed-startover-cp.ckpt"
+    checkpoint_path = "models/"+data_file+".ckpt"
     #checkpoint_dir = os.path.dirname(checkpoint_path)
 
     # Create a callback that saves the model's weights
