@@ -4,22 +4,55 @@ import os
 import matplotlib.pyplot as plt
 import argparse
 import toml
+import prediction_callback
 
 def build_model(in_x, in_y, out_x, out_y):
     model = tf.keras.Sequential([
         tf.keras.layers.Flatten(input_shape=(in_x, in_y)),
-        tf.keras.layers.Dense(int(in_x/2*in_y), activation='relu'),
+        tf.keras.layers.Dense(int(in_x*16*in_y), bias_initializer ='ones', activation='relu'),
+        tf.keras.layers.Dense(int(in_x*8*in_y), activation='relu'),
         tf.keras.layers.Dense(int(out_x*out_y*4), activation='relu'),
         tf.keras.layers.Dense(out_x*out_y)
     ])
 
-    optimizer = tf.keras.optimizers.RMSprop(0.001)
+    optimizer = tf.keras.optimizers.RMSprop(0.01)
 
     model.compile(loss='mse',
                 optimizer=optimizer,
                 metrics=['mae', 'mse'])
     return model
 
+def plot_preview(edep, truth, desc):
+    edep_resized = edep.T
+    fig3 = plt.figure(constrained_layout=True)
+    gs = fig3.add_gridspec(2, 2)
+
+    if truth is not None:
+        f3_ax1 = fig3.add_subplot(gs[0, 1])
+        truth_im = f3_ax1.imshow(truth)
+        f3_ax1.set_title("truth")
+        f3_ax1.set_xlabel('E')
+        f3_ax1.set_ylabel('Y')
+        #fig3.colorbar(truth_im, cax=f3_ax1)
+        f3_ax1 = fig3.add_subplot(gs[1, 1])
+        truth_summed = np.sum(truth, axis = 0)
+        f3_ax1.plot(truth_summed)
+        f3_ax1.set_title("truth")
+        f3_ax1.set_xlabel('E')
+
+    f3_ax3 = fig3.add_subplot(gs[:, 0])
+    f3_ax3.set_title('gs[:, 0]')
+    #im = f3_ax3.imshow(edep_resized, origin='lower')
+    #ax.clabel(CS, inline=1, fontsize=10)
+    plot_e = edep_resized.T
+    f3_ax3.plot(plot_e[int(len(plot_e)/2)])
+    f3_ax3.set_title("e dep")
+    f3_ax3.set_xlabel('Y')
+    f3_ax3.set_ylabel('Z')
+    #fig3.colorbar(im, ax=f3_ax3)
+
+    plt.savefig(desc)
+    plt.clf()
 
 def main():
     parser = argparse.ArgumentParser(
@@ -36,22 +69,26 @@ def main():
     y_bins = int(conf['Simulation']['YBins'])
 
     data_files = args.data_file_name
-    train_examples = np.zeros((1, x_bins, y_bins))
+    train_examples = np.zeros((1, 1, y_bins))
+    print(train_examples.shape)
     train_labels = np.zeros((1, l_e_bins*l_y_bins))
-    test_examples = np.zeros((1, x_bins, y_bins))
+    test_examples = np.zeros((1, 1, y_bins))
     test_labels = np.zeros((1,l_e_bins*l_y_bins))
     name_string = ""
     for i in range(len(data_files)):
         data_file = data_files[i]
         name_string = name_string+data_file.replace("/", "")
         with np.load(data_file+'.npz') as data:
-            print(data['train_data'].shape)
+            print(data['train_data'][:].shape)
             print(data['train_labels'].shape)
-            train_examples = np.append(train_examples, data['train_data'], axis = 0 )
+            train_examples = np.append(train_examples, data['train_data'][:, int(x_bins/2), np.newaxis], axis = 0 )
             train_labels = np.append(train_labels, data['train_labels'], axis = 0)
-            test_examples = np.append(test_examples, data['test_data'], axis = 0)
+            test_examples = np.append(test_examples, data['test_data'][:, int(x_bins/2), np.newaxis], axis = 0)
             test_labels = np.append(test_labels, data['test_labels'], axis = 0)
             print(data_file, train_examples.shape, train_labels.shape)
+            plot_preview(train_examples[-1], train_labels[-1, np.newaxis], "last-train-"+data_file.replace("/", "")+".png")
+            plot_preview(test_examples[-1], test_labels[-1, np.newaxis], "last-test-"+data_file.replace("/", "")+".png")
+
 
     train_examples = train_examples[1:].astype(float)
     train_labels = train_labels[1:].astype(float)
@@ -63,15 +100,20 @@ def main():
     #normalization 
     train_shape = train_examples.shape
     test_shape = test_examples.shape
-    max_train = np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
-    max_test = np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
-    print("max train", max_train[1])  
-    train_examples = train_examples/max_train[:, np.newaxis, np.newaxis]    
-    train_labels = train_labels/max_train[:, np.newaxis]  #units??
-    test_examples = test_examples/max_test[:, np.newaxis, np.newaxis] 
-    test_labels = test_labels/max_test[:, np.newaxis]
+    max_train = 0.15#np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
+    max_test = 0.15#np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
+    print("max train", max_train)  
+    train_examples = train_examples/max_train#[:, np.newaxis, np.newaxis]    
+    train_labels = train_labels/1e5#max_train[:, np.newaxis]  #units??
+    test_examples = test_examples/max_test#[:, np.newaxis, np.newaxis] 
+    test_labels = test_labels/1e5#max_test[:, np.newaxis]
     print(train_examples[1][0][1])
     print(train_labels[1][1])
+
+    print(test_examples.shape, test_labels.shape)
+    plt.plot(test_labels.T)
+    plt.savefig("all-test-labels-"+name_string.replace("/", "")+".png")
+    plt.clf()
     #return 
     train_dataset = tf.data.Dataset.from_tensor_slices((train_examples, train_labels))
     test_dataset = tf.data.Dataset.from_tensor_slices((test_examples, test_labels))
@@ -83,7 +125,7 @@ def main():
     test_dataset = test_dataset.batch(BATCH_SIZE)
 
 
-    model = build_model(x_bins, y_bins, l_y_bins, l_e_bins)
+    model = build_model(1, y_bins, l_y_bins, l_e_bins)
     print(model.summary())
 
     checkpoint_path = "models/"+name_string+".ckpt"
@@ -99,10 +141,12 @@ def main():
 
     # The patience parameter is the amount of epochs to check for improvement
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
+    prediction_cb = prediction_callback.EarlyStoppingWhenOutputRepeats(patience=10, 
+        config_file = args.config, slice_index = int(x_bins/2))
 
     # Train the model with the new callback
     model.fit(train_dataset, epochs=10000, validation_data=test_dataset, 
-            callbacks=[cp_callback, early_stop])
+            callbacks=[cp_callback, early_stop])#, prediction_cb
 
     #print(model.evaluate(test_dataset))
     #print("Trained model, accuracy: {:5.2f}%".format(100*acc))

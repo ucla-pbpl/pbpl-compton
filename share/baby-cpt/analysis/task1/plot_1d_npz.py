@@ -10,6 +10,8 @@ def main():
         help="set where the data comes from.")
     parser.add_argument("--config", required=True, 
         help="set dimensions of input and output data")
+    parser.add_argument("--log", required=True, 
+        help="set y scale")
     args = parser.parse_args()
 
     name_string = ""
@@ -20,6 +22,8 @@ def main():
             prediction = np.array(data["prediction"])
             prediction_1d = np.sum(prediction, axis=0)
             plt.plot(prediction_1d, label = data_file)
+    if (args.log=="True"):
+        plt.yscale("log")
     plt.legend()
     #plt.show()
     plt.savefig(name_string+".png")

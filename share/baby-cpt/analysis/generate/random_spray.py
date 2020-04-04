@@ -7,6 +7,10 @@ import generate_distrib
 import image_spray
 import triangle_spray
 
+def get_distrib_uniform(num, bins, lower, upper):
+    energy = random.uniform(lower, upper, k=num)
+    return energy
+
 def get_distrib_random(num, bins, lower, upper):
     weights = np.zeros([ bins])
     #1. random distrib
