@@ -2,6 +2,7 @@ import numpy as np
 import toml
 import matplotlib.pyplot as plt
 import argparse
+import h5py
 
 def main():
     parser = argparse.ArgumentParser(
@@ -67,8 +68,32 @@ def main():
     plt.savefig("ratios-"+name_string+".png")
 
 
+def find_energy_ratio():
+    gin = h5py.File('fake-data/response-4500A.h5')
+    edeps = gin['compton-electron']['edep'] # (100, 1, 5, 300, 450)
+    print(edeps.shape)
+    edeps = np.squeeze(edeps)
 
+    num_events = np.squeeze(gin["num_events"]) #100
+    print(num_events.shape)
+    energy_ranges = gin['i0'] #101
+    print(energy_ranges.shape)
+
+    edep_flattened = edeps.reshape(100,-1)
+    edep_per_sheet = np.sum(edep_flattened, axis=1)
+    print(edep_per_sheet.shape)
+
+    energy_range_lengths = np.diff(energy_ranges)
+    energy_midpoints = energy_ranges[0:-1]+energy_range_lengths/2
+    print(energy_midpoints.shape)
+    energy_per_sheet = num_events*energy_midpoints
+    print(energy_per_sheet.shape)
+
+    ratios = edep_per_sheet/energy_per_sheet
+
+    plt.plot(energy_midpoints, ratios)
+    plt.savefig("ratios-of-edep-vs-energy.png")
 
 
 if __name__ == "__main__":
-    main()
+    find_energy_ratio()

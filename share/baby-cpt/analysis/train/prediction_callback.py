@@ -32,7 +32,7 @@ class EarlyStoppingWhenOutputRepeats(tf.keras.callbacks.Callback):
 
   def on_epoch_end(self, epoch, logs=None):
     #python ../train/predict_summed_image.py --dir . --h5_name test_saving_h5-901-SQP265 --model models/test_saving_h5.ckpt --config task1_small.toml --out correctly_normalized
-    filename  = ["../task1/train-801.h5", "../task1/test-900.h5"]#fake-0-W6STL1.h5 OR train-801.h5
+    filename  = ["../task1/train-energy-801.h5", "../task1/test-energy-900.h5"]#fake-0-W6STL1.h5 OR train-801.h5
     config_file = self.config_file
     edep_normalized_1, edep_max_1 = predict_summed_image.preprocess_summed_h5(filename[0], config_file)
     edep_normalized_2, edep_max_2 = predict_summed_image.preprocess_summed_h5(filename[1], config_file)

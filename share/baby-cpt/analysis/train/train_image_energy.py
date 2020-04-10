@@ -23,10 +23,11 @@ def build_model(in_x, in_y, out_x, out_y):
         #tf.keras.layers.Dense(int(out_x*out_y*32), activation='relu'),
         #tf.keras.layers.Dense(int(out_x*out_y*16), activation='relu'),
         #tf.keras.layers.Dense(int(out_x*out_y*16), activation='relu'),
-        tf.keras.layers.Dense(int(in_x*16*in_y), bias_initializer ='ones', activation='relu'),
-        tf.keras.layers.Dense(int(in_x*8*in_y), activation='relu'),
-        tf.keras.layers.Dense(int(out_x*out_y*4), activation='relu'),
-        tf.keras.layers.Dense(int(out_x*out_y)),#activation='relu'
+        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, bias_initializer ='ones', activation='relu'),
+        #tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation='relu'),####### added
+        tf.keras.layers.Dense(int(in_x*8*in_y), use_bias=False,activation='relu'),
+        tf.keras.layers.Dense(int(out_x*out_y*4), use_bias=False, activation='relu'),
+        tf.keras.layers.Dense(int(out_x*out_y), use_bias=False),#activation='relu'
         #tf.keras.layers.Dense(out_x*out_y)
     ])
 
@@ -38,7 +39,7 @@ def build_model(in_x, in_y, out_x, out_y):
     return model
 
 def plot_preview(edep, truth, desc):
-    edep_resized = edep.T
+    #edep_resized = edep.T
     fig3 = plt.figure(constrained_layout=True)
     gs = fig3.add_gridspec(2, 2)
 
@@ -59,7 +60,7 @@ def plot_preview(edep, truth, desc):
     f3_ax3.set_title('gs[:, 0]')
     #im = f3_ax3.imshow(edep_resized, origin='lower')
     #ax.clabel(CS, inline=1, fontsize=10)
-    plot_e = edep_resized.T
+    plot_e = edep#_resized.T
     f3_ax3.plot(plot_e[int(len(plot_e)/2)])
     f3_ax3.set_title("e dep")
     f3_ax3.set_xlabel('Y')
@@ -84,10 +85,10 @@ def main():
     y_bins = int(conf['Simulation']['YBins'])
 
     data_files = args.data_file_name
-    train_examples = np.zeros((1, 1, y_bins))
+    train_examples = np.zeros((1, 1, x_bins))
     print(train_examples.shape)
     train_labels = np.zeros((1, l_e_bins*l_y_bins))
-    test_examples = np.zeros((1, 1, y_bins))
+    test_examples = np.zeros((1, 1, x_bins))
     test_labels = np.zeros((1,l_e_bins*l_y_bins))
     name_string = ""
     for i in range(len(data_files)):
@@ -96,9 +97,9 @@ def main():
         with np.load(data_file+'.npz') as data:
             print(data['train_data'][:].shape)
             print(data['train_labels'].shape)
-            train_examples = np.append(train_examples, data['train_data'][:, int(x_bins/2), np.newaxis], axis = 0 )#
+            train_examples = np.append(train_examples, data['train_data'][:, int(y_bins/2), np.newaxis], axis = 0 )#
             train_labels = np.append(train_labels, data['train_labels'], axis = 0)
-            test_examples = np.append(test_examples, data['test_data'][:, int(x_bins/2), np.newaxis], axis = 0)#
+            test_examples = np.append(test_examples, data['test_data'][:, int(y_bins/2), np.newaxis], axis = 0)#
             test_labels = np.append(test_labels, data['test_labels'], axis = 0)
             print(data_file, train_examples.shape, train_labels.shape)
             plot_preview(train_examples[-1], train_labels[-1, np.newaxis], "last-train-"+data_file.replace("/", "")+".png")
@@ -135,7 +136,7 @@ def main():
     plt.plot(test_examples_plot.T)
     plt.savefig("all-test-examples-"+name_string.replace("/", "")+".png")
     plt.clf()
-    return
+    
     #return 
     train_dataset = tf.data.Dataset.from_tensor_slices((train_examples, train_labels))
     test_dataset = tf.data.Dataset.from_tensor_slices((test_examples, test_labels))
@@ -147,7 +148,7 @@ def main():
     test_dataset = test_dataset.batch(BATCH_SIZE)
 
 
-    model = build_model(1, y_bins, l_y_bins, l_e_bins)
+    model = build_model(1, x_bins, l_y_bins, l_e_bins)
     print(model.summary())
 
     checkpoint_path = "models/"+name_string+".ckpt"

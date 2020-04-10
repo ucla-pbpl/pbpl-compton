@@ -95,20 +95,22 @@ def main():
     test_examples = test_examples[1:].astype(float)
     test_labels = test_labels[1:].astype(float)
 
-    print(train_examples.shape, train_labels.shape)
+    print("train_examples.shape, train_labels.shape", train_examples.shape, train_labels.shape)
 
-    #normalization 
+    #normalization u
     train_shape = train_examples.shape
     test_shape = test_examples.shape
-    max_train = 0.15#np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
-    max_test = 0.15#np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
-    print("max train", max_train)  
+
+    ratio = 1 #1.5e7
+
+    max_train = 1#np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
+    max_test = 1#np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
     train_examples = train_examples/max_train#[:, np.newaxis, np.newaxis]    
-    train_labels = train_labels/1e5#max_train[:, np.newaxis]  #units??
+    train_labels = train_labels/ratio/max_train#[:, np.newaxis]  #units??
     test_examples = test_examples/max_test#[:, np.newaxis, np.newaxis] 
-    test_labels = test_labels/1e5#max_test[:, np.newaxis]
-    print(train_examples[1][0][1])
-    print(train_labels[1][1])
+    test_labels = test_labels/ratio/max_test#[:, np.newaxis]
+    print("train_examples[1][0][1]", train_examples[1][0][1])
+    print("train_labels[1][1]", train_labels[1][1])
 
     print(test_examples.shape, test_labels.shape)
     plt.plot(test_labels.T)
