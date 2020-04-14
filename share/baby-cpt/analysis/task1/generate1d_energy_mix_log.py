@@ -71,11 +71,11 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
     #return
     #ln_e_lower = np.log(l_e_lower)
     #ln_e_upper = np.log(l_e_upper)
-    num_events = np.squeeze(np.array(num_events))
+    num_events = np.squeeze(np.array(num_events))#100
     print("num_events.shape", num_events.shape)
-    energy_ranges = np.squeeze(np.array(energy_ranges))
+    energy_ranges = np.squeeze(np.array(energy_ranges))#101
     print("energy_ranges.shape", energy_ranges.shape)
-    energy_range_lengths = np.diff(energy_ranges)
+    energy_range_lengths = np.diff(energy_ranges)#100
     energy_midpoints = energy_ranges[0:-1]+energy_range_lengths/2
 
     #edep_flattened = edeps.reshape(len(num_events),-1)
@@ -86,8 +86,9 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
     edep = np.array(edep).sum(axis=1)
     edep_resized = resize(edep, (len(edep), y_bins, x_bins))
     edep_transposed = edep_resized.transpose(1, 2, 0)
+
     # the avaraged response of one MeV in the energy range (a, b)
-    edep_transposed_averaged = edep_transposed/(num_events*energy_midpoints)
+    edep_transposed_averaged = edep_transposed/(num_events*energy_midpoints) #correct
     print(edep_transposed_averaged[0][1][1])
 
     train_data = np.empty([1, y_bins, x_bins])
@@ -99,19 +100,23 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
 
     for i in range(0, num):
         
-        e_component_weights = np.stack((get_weights_gaussian(l_e_bins, 0.2),
-                            get_weights_gaussian(l_e_bins, 0.2),
-                            get_weights_gaussian(l_e_bins, 0.3), 
+        e_component_weights = np.stack((#get_weights_gaussian(l_e_bins, 0.2),
+                            #get_weights_gaussian(l_e_bins, 2),
+                            get_weights_gaussian(l_e_bins, 10), 
                             #get_weights_cosine(l_e_bins)*0.1, 
                             #get_weights_random(l_e_bins)*0.1, 
-                            get_weights_gaussian(l_e_bins, 0.4), 
-                            get_weights_gaussian(l_e_bins, 0.3),
-                            get_weights_gaussian(l_e_bins, 0.2),
-                            get_weights_gaussian(l_e_bins, 0.2),
+                            get_weights_gaussian(l_e_bins, 40), 
+                            get_weights_gaussian(l_e_bins, 30),
+                            #get_weights_gaussian(l_e_bins, 15),
+                            get_weights_gaussian(l_e_bins, 20),
+                            #get_weights_gaussian(l_e_bins, 30),
+                            #get_weights_gaussian(l_e_bins, 0.2),
                             ))
-        function_weights = np.random.rand(7)
+        function_weights = np.random.rand(4)
         e_float_weights = ((np.dot(e_component_weights.T, function_weights)).T)*1#1e9
         e_weights = e_float_weights#.astype(int)
+        #want this to be energy_density. 
+        #amount of energy between i MeV, j MeV is energy_density((i+j)/2)*(j-i)
         #print(e_weights)
         weights = np.zeros(num_simulations)#, dtype = int
         for j in range(0, l_e_bins):
@@ -125,7 +130,8 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
                 continue
             else:
                 #print("idx[-1][-1]", idx_l[-1][-1], idx_u[0])
-                weights[idx_l[-1][-1]]+=e_weights[j]
+                conversion = (ej_u-ej_l)/(energy_ranges[idx_u[-1][0]]-energy_ranges[idx_l[-1][-1]]) 
+                weights[idx_l[-1][-1]]+=e_weights[j]*conversion
         #print(weights)
         #return
         #edep_transposed = edep_resized.transpose(2, 3, 1)

@@ -23,9 +23,11 @@ def build_model(in_x, in_y, out_x, out_y):
         #tf.keras.layers.Dense(int(out_x*out_y*32), activation='relu'),
         #tf.keras.layers.Dense(int(out_x*out_y*16), activation='relu'),
         #tf.keras.layers.Dense(int(out_x*out_y*16), activation='relu'),
-        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, bias_initializer ='ones', activation='relu'),
+        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation='relu'),
         #tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation='relu'),####### added
+        #tf.keras.layers.Dropout(0.3),
         tf.keras.layers.Dense(int(in_x*8*in_y), use_bias=False,activation='relu'),
+        tf.keras.layers.Dense(int(in_x*4*in_y), use_bias=False,activation='relu'),
         tf.keras.layers.Dense(int(out_x*out_y*4), use_bias=False, activation='relu'),
         tf.keras.layers.Dense(int(out_x*out_y), use_bias=False),#activation='relu'
         #tf.keras.layers.Dense(out_x*out_y)
@@ -119,8 +121,8 @@ def main():
 
     ratio = 0.01 #1.5e7
 
-    max_train = 1.5e-9#np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
-    max_test = 1.5e-9#np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
+    max_train = 0.7e-9#1.5e-9#np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
+    max_test = 0.7e-9#1.5e-9#np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
     train_examples = train_examples/max_train#[:, np.newaxis, np.newaxis]    
     train_labels = train_labels/ratio#max_train#[:, np.newaxis]  #units??
     test_examples = test_examples/max_test#[:, np.newaxis, np.newaxis] 

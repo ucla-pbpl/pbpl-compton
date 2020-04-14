@@ -57,6 +57,11 @@ def main(args):
     y_bins = int(conf['Simulation']['YBins'])
     l_y_bins = int(conf['PrimaryGenerator']['YBins'])
     l_e_bins = int(conf['PrimaryGenerator']['EBins'])
+    l_y_lower = conf['PrimaryGenerator']['YLower']
+    l_e_lower = conf['PrimaryGenerator']['ELower']
+    l_y_upper = conf['PrimaryGenerator']['YUpper']
+    l_e_upper = conf['PrimaryGenerator']['EUpper']
+
 
     assert x_max == zbin[-1], "x/z={} bound doesn't match {}".format(x_max, zbin[-1])
     assert y_max == ybin[-1], "y={} bound doesn't match {}".format(y_max, ybin[-1])
@@ -77,16 +82,18 @@ def main(args):
     # Loads the weights
     model.load_weights(checkpoint_path)
 
-    test_predictions = model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]])/1.5e-7
+    test_predictions = model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]])/0.7e-7
 
 
     fig3 = plt.figure(constrained_layout=True)
-    gs = fig3.add_gridspec(nrows=1, ncols=2, width_ratios = [10., 7.])
+    gs = fig3.add_gridspec(nrows=2, ncols=1, height_ratios = [10., 7.])
 
-    f3_ax1 = fig3.add_subplot(gs[0, 1])
+    f3_ax1 = fig3.add_subplot(gs[1, 0])
+    photon_e_bins = np.logspace(np.log(l_e_lower), np.log(l_e_upper), l_e_bins+1, base=np.e)
+    print(photon_e_bins)
     if truth is not None:
         truth_c = truth[int(l_y_bins/2)]
-        f3_ax1.plot(truth_c, label = "truth")
+        f3_ax1.plot(photon_e_bins[:-1], truth_c, label = "truth")
         f3_ax1.set_title("truth vs prediction")
         
         #f3_ax1_c = fig3.add_subplot(gs[0, 3])
@@ -94,12 +101,13 @@ def main(args):
 
     prediction = test_predictions.reshape(l_y_bins, l_e_bins)
     prediction_c = prediction[int(l_y_bins/2)]
-    f3_ax1.plot(prediction_c, label = "prediction")
+    f3_ax1.plot(photon_e_bins[:-1], prediction_c, label = "prediction")
     #pre_im = f3_ax2.imshow(prediction)
     #f3_ax2.set_title("prediction")
 
-    f3_ax1.set_xlabel('E')
-    f3_ax1.set_ylabel('dE in photons')
+    f3_ax1.set_xscale('log')
+    f3_ax1.set_xlabel('E (MeV)')
+    f3_ax1.set_ylabel('dE in photons (MeV)')
     f3_ax1.legend()
 
     f3_ax3 = fig3.add_subplot(gs[0, 0])
@@ -107,10 +115,10 @@ def main(args):
     #im = f3_ax3.imshow(edep_normalized, interpolation='bilinear', origin='lower')
     #ax.clabel(CS, inline=1, fontsize=10)
     #f3_ax3.set_title("e dep")
-    f3_ax3.set_xlabel('Z')
-    f3_ax3.set_ylabel('E')
+    f3_ax3.set_xlabel('Z (mm)')
+    f3_ax3.set_ylabel('E (MeV)')
     #plot_e = edep_normalized
-    f3_ax3.plot(edep_normalized[int(y_bins/2)])
+    f3_ax3.plot(np.linspace(0, x_max, x_bins+1)[:-1], edep_normalized[int(y_bins/2)])
     f3_ax3.set_title("e dep")
     #f3_ax3_c = fig3.add_subplot(gs[:, 1])
     #fig3.colorbar(im, cax=f3_ax3_c, shrink=0.6)
