@@ -189,7 +189,7 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
             gout = fout.create_group(self.groupname)
         else:
             gout = fout
-        gout['edep'] = self.hist/MeV
+        gout['edep'] = self.hist.astype('float32')/MeV
         gout['edep'].attrs.create('num_events', num_events)
         gout['edep'].attrs.create('unit', np.string_('MeV'))
         for i, dset_name in enumerate(['xbin', 'ybin', 'zbin']):
