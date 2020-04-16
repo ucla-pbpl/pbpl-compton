@@ -13,6 +13,7 @@ GridResolution = 0.5  # (mm)
 
 [Pores]
 a = 3.0        # lattice constant (mm)
+wall = 0.5     # wall thickness (mm)
 delta_z = 0.0
 z0 = 10.0
 lz = 225.0
