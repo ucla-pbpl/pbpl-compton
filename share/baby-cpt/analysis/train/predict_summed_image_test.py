@@ -82,7 +82,7 @@ def main(args):
     # Loads the weights
     model.load_weights(checkpoint_path)
 
-    test_predictions = model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]])/0.7e-7
+    test_predictions = model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]])/1e-7
 
 
     fig3 = plt.figure(constrained_layout=True)
