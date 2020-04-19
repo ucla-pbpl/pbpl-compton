@@ -14,7 +14,7 @@ def generate_distrib(lower, upper, stats_func, num, param=[]):
     return xr
 
 def get_weights_gaussian(num_simulations, sigma):
-    mu = random.randint(0, num_simulations)
+    mu = random.randint(int(0-sigma*2), int(num_simulations+sigma*2))
     #variance = 60
     #sigma = 40
     x = np.linspace(0, num_simulations, num_simulations)
@@ -78,6 +78,8 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
     energy_range_lengths = np.diff(energy_ranges)#100
     energy_midpoints = energy_ranges[0:-1]+energy_range_lengths/2
 
+    resampled_energy_ranges = np.logspace(np.log(l_e_lower), np.log(l_e_upper), l_e_bins+1, base=np.e)
+
     #edep_flattened = edeps.reshape(len(num_events),-1)
     #edep_per_sheet = np.sum(edep_flattened, axis=1)
     #print(edep_per_sheet.shape)
@@ -101,42 +103,43 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
     for i in range(0, num):
         
         e_component_weights = np.stack((#get_weights_gaussian(l_e_bins, 0.2),
-                            #get_weights_gaussian(l_e_bins, 2),
-                            get_weights_gaussian(l_e_bins, 10), 
+                            get_weights_gaussian(l_e_bins, 20),
+                            get_weights_gaussian(l_e_bins, 12), 
                             #get_weights_cosine(l_e_bins)*0.1, 
                             #get_weights_random(l_e_bins)*0.1, 
                             get_weights_gaussian(l_e_bins, 40), 
                             get_weights_gaussian(l_e_bins, 30),
-                            #get_weights_gaussian(l_e_bins, 15),
                             get_weights_gaussian(l_e_bins, 20),
-                            #get_weights_gaussian(l_e_bins, 30),
+                            get_weights_gaussian(l_e_bins, 7),
+                            get_weights_gaussian(l_e_bins, 30),
                             #get_weights_gaussian(l_e_bins, 0.2),
                             ))
-        function_weights = np.random.rand(4)
+        function_weights = np.random.rand(7)
         e_float_weights = ((np.dot(e_component_weights.T, function_weights)).T)*1#1e9
-        e_weights = e_float_weights#.astype(int)
+        e_weights = e_float_weights/np.max(e_float_weights)#.astype(int)
         #want this to be energy_density. 
         #amount of energy between i MeV, j MeV is energy_density((i+j)/2)*(j-i)
         #print(e_weights)
-        weights = np.zeros(num_simulations)#, dtype = int
-        for j in range(0, l_e_bins):
-            ej_l = np.exp(np.log(l_e_lower)+(np.log(l_e_upper)-np.log(l_e_lower))/l_e_bins*(j))
-            ej_u = np.exp(np.log(l_e_lower)+(np.log(l_e_upper)-np.log(l_e_lower))/l_e_bins*(j+1))
-            ej = np.random.uniform(low=ej_l, high=ej_u)
-            #print(ej)
-            idx_l = np.where(energy_ranges<ej)
-            idx_u = np.where(energy_ranges>ej)
-            if(len(idx_l)==0 or len(idx_u)==0):
-                continue
-            else:
-                #print("idx[-1][-1]", idx_l[-1][-1], idx_u[0])
-                conversion = (ej_u-ej_l)/(energy_ranges[idx_u[-1][0]]-energy_ranges[idx_l[-1][-1]]) 
-                weights[idx_l[-1][-1]]+=e_weights[j]*conversion
+        weights = np.interp(energy_ranges[:-1], resampled_energy_ranges[:-1], e_weights)#
+        #np.zeros(num_simulations)#, dtype = int
+        #for j in range(0, l_e_bins):
+        #    ej_l = np.exp(np.log(l_e_lower)+(np.log(l_e_upper)-np.log(l_e_lower))/l_e_bins*(j))
+        #    ej_u = np.exp(np.log(l_e_lower)+(np.log(l_e_upper)-np.log(l_e_lower))/l_e_bins*(j+1))
+        #    ej = np.random.uniform(low=ej_l, high=ej_u)
+        #    #print(ej)
+        #    idx_l = np.where(energy_ranges<ej)
+        #    idx_u = np.where(energy_ranges>ej)
+        #    if(len(idx_l)==0 or len(idx_u)==0):
+        #        continue
+        #    else:
+        #        #print("idx[-1][-1]", idx_l[-1][-1], idx_u[0])
+        #        conversion = (ej_u-ej_l)/(energy_ranges[idx_u[-1][0]]-energy_ranges[idx_l[-1][-1]]) 
+        #        weights[idx_l[-1][-1]]+=e_weights[j]*conversion
         #print(weights)
         #return
         #edep_transposed = edep_resized.transpose(2, 3, 1)
         ###################### key step ######################
-        new_edep = np.dot(edep_transposed_averaged, weights)
+        new_edep = np.dot(edep_transposed_averaged, weights*energy_range_lengths)
         ######################################################
         #total = int(np.sum(weights))
         #print(total)
@@ -181,7 +184,7 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
         else:
             train_data = np.append(train_data, [new_edep], axis=0)
             train_labels = np.append(train_labels, [histo.flatten()], axis = 0)
-            print("train_labels.shape", train_labels.shape)
+            #print("train_labels.shape", train_labels.shape)
 
     print("train_data.shape", train_data.shape)
     train_data = train_data[1:].astype(float)

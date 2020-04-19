@@ -5,35 +5,23 @@ import matplotlib.pyplot as plt
 import argparse
 import toml
 import prediction_callback
+from pbpl import common
+import data_normalization
 
 def build_model(in_x, in_y, out_x, out_y):
     model = tf.keras.Sequential([
-        #tf.keras.layers.Permute((2,1), input_shape=(in_x, in_y)),
-        #tf.keras.layers.Conv2D(int(in_x*in_y/16), (4, 4)),
-        #tf.keras.layers.AveragePooling1D(),#input_shape=(in_x, in_y)
         tf.keras.layers.Flatten(input_shape=(in_x, in_y)),#input_shape=(in_x, in_y)
-        #tf.keras.layers.Dense(int(in_x*128*in_y), activation='relu'),
-        #tf.keras.layers.Dense(int(in_x*64*in_y), activation='relu'),
-        #tf.keras.layers.Dense(int(in_x*64*in_y), activation='relu'),
-        #tf.keras.layers.AveragePooling1D(),
-        #tf.keras.layers.Conv1D(in_x*64*in_y, 1, activation='relu'),
-        #tf.keras.layers.Dense(int(in_x*64*in_y), activation='sigmoid'),
-        #tf.keras.layers.Dense(int(in_x*32*in_y), activation='sigmoid'),#, activation='relu'
-        #tf.keras.layers.Flatten(),
-        #tf.keras.layers.Dense(int(out_x*out_y*32), activation='relu'),
-        #tf.keras.layers.Dense(int(out_x*out_y*16), activation='relu'),
-        #tf.keras.layers.Dense(int(out_x*out_y*16), activation='relu'),
-        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation='relu'),
+        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False),
         #tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation='relu'),####### added
         #tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Dense(int(in_x*8*in_y), use_bias=False,activation='relu'),
-        tf.keras.layers.Dense(int(in_x*4*in_y), use_bias=False,activation='relu'),
-        tf.keras.layers.Dense(int(out_x*out_y*4), use_bias=False, activation='relu'),
-        tf.keras.layers.Dense(int(out_x*out_y), use_bias=False),#activation='relu'
+        tf.keras.layers.Dense(int(in_x*8*in_y), use_bias=False),
+        tf.keras.layers.Dense(int(in_x*4*in_y), use_bias=False),
+        tf.keras.layers.Dense(int(out_x*out_y*4), use_bias=False),
+        tf.keras.layers.Dense(int(out_x*out_y)),#activation='relu'
         #tf.keras.layers.Dense(out_x*out_y)
     ])
 
-    optimizer = tf.keras.optimizers.RMSprop(0.01)
+    optimizer = tf.keras.optimizers.RMSprop(0.001)
 
     model.compile(loss='mse',
                 optimizer=optimizer,
@@ -80,6 +68,9 @@ def main():
     parser.add_argument("--config", required=True, 
         help="set dimensions of input and output data")
     args = parser.parse_args()
+
+    common.setup_plot()
+
     conf = toml.load(args.config)
     l_y_bins = int(conf['PrimaryGenerator']['YBins'])
     l_e_bins = int(conf['PrimaryGenerator']['EBins'])
@@ -123,20 +114,29 @@ def main():
 
     max_train = 0.1e-9#1.5e-9#np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
     max_test = 0.1e-9#1.5e-9#np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
-    train_examples = train_examples/max_train#[:, np.newaxis, np.newaxis]    
-    train_labels = train_labels/ratio#max_train#[:, np.newaxis]  #units??
-    test_examples = test_examples/max_test#[:, np.newaxis, np.newaxis] 
-    test_labels = test_labels/ratio#max_test#[:, np.newaxis]
+    z_weights = (0.0006*np.linspace(0, 127, 128)**2+0.2)/5
+    train_examples, _ = data_normalization.normalize_examples(train_examples)#/max_train/z_weights#[:, np.newaxis, np.newaxis]    
+    train_labels = data_normalization.normalize_labels(train_labels)#/ratio#max_train#[:, np.newaxis]  #units??
+    test_examples, _ = data_normalization.normalize_examples(test_examples)#/max_test/z_weights#[:, np.newaxis, np.newaxis] 
+    test_labels = data_normalization.normalize_labels(test_labels)#/ratio#max_test#[:, np.newaxis]
     print("train_examples[1][0][1]", train_examples[1][0][1])
     print("train_labels[1][1]", train_labels[1][1])
 
     print(test_examples.shape, test_labels.shape)
-    plt.plot(test_labels.T)
-    plt.savefig("all-test-labels-"+name_string.replace("/", "")+".png")
+    fig = plt.figure(figsize=(3+3/8, 2+2/8), dpi=600)
+    ax = fig.add_subplot(1, 1, 1)
+    ax.plot(test_labels.T,alpha=0.1)
+    ax.set_xlabel("index")
+    ax.set_ylabel("energy density (arb)")
+    plt.savefig("reusable-all-test-labels-weighted-"+name_string.replace("/", "")+".png")
     plt.clf()
+    fig = plt.figure(figsize=(3+3/8, 2+2/8), dpi=600)
+    ax = fig.add_subplot(1, 1, 1)
     test_examples_plot = np.squeeze(test_examples)
-    plt.plot(test_examples_plot.T)
-    plt.savefig("all-test-examples-"+name_string.replace("/", "")+".png")
+    ax.plot(test_examples_plot.T, alpha=0.1)
+    ax.set_xlabel("index")
+    ax.set_ylabel("energy deposition (arb)")
+    plt.savefig("reusable-all-test-examples-weighted-"+name_string.replace("/", "")+".png")
     plt.clf()
     
     labels_max = np.max(test_labels, axis=1)
@@ -144,7 +144,7 @@ def main():
     print("averaged_label_max", average_max)
     print("max_label_max", np.max(labels_max))
     print("std_label_max", np.std(labels_max))
-    return 
+    
     train_dataset = tf.data.Dataset.from_tensor_slices((train_examples, train_labels))
     test_dataset = tf.data.Dataset.from_tensor_slices((test_examples, test_labels))
 
@@ -158,7 +158,7 @@ def main():
     model = build_model(1, x_bins, l_y_bins, l_e_bins)
     print(model.summary())
 
-    checkpoint_path = "models/"+name_string+".ckpt"
+    checkpoint_path = "models-reusable/"+name_string+".ckpt"
     #checkpoint_dir = os.path.dirname(checkpoint_path)
 
     # Create a callback that saves the model's weights
@@ -187,9 +187,9 @@ def main():
     print(labels_max.shape)
     print(labels_max[np.argmax(labels_max)])
     print(labels_max[np.argmin(labels_max)])
-    #plt.scatter(np.argmax(test_labels, axis=1), np.argmax(test_predictions, axis=1))#, range=[[0, 50*50], [0, 50*50]], bins=50*50)
-    plt.hist2d(np.argmax(test_labels, axis=1), np.argmax(test_predictions, axis=1), 
-        range=[[0, l_e_bins*l_y_bins], [0, l_y_bins*l_e_bins]], bins=50)
+    plt.scatter(np.argmax(test_labels, axis=1), np.argmax(test_predictions, axis=1), s=4, alpha=0.3)#, range=[[0, 50*50], [0, 50*50]], bins=50*50)
+    #plt.hist2d(np.argmax(test_labels, axis=1), np.argmax(test_predictions, axis=1), 
+        #range=[[0, l_e_bins*l_y_bins], [0, l_y_bins*l_e_bins]], bins=50, cmap="gist_gray_r")
     plt.xlabel('True Max Index')
     plt.ylabel('Predictions')
     plt.axis('equal')
@@ -200,7 +200,7 @@ def main():
         #print(-100+(x-3)*31*5)
         #plt.plot([-100+(x-3)*31, 31*50+(x-3)*31], [-100-(x-3)*31, 31*50-(x-3)*31], c='red')
         plt.plot([-100, l_y_bins*l_e_bins], [-100, l_y_bins*l_e_bins], c='red')
-    plt.savefig(name_string+".png")
+    plt.savefig("reusable"+name_string+".png")
 
 
 if __name__ == "__main__":

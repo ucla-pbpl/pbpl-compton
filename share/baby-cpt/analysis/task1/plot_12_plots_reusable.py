@@ -9,6 +9,7 @@ import argparse
 import toml
 from skimage.transform import resize
 from pbpl import common
+import data_normalization
 
 def preprocess_summed_h5(filename, config_file):
     gin = h5py.File(filename, 'r')
@@ -86,11 +87,11 @@ def main(args):
             #plt.savefig("raw-"+name+".png")
 
             edep_resized = resize(edep, (y_bins, x_bins))
-            edep_max = np.max(edep_resized)
-            z_weights = (0.0006*np.linspace(0, 127, 128)**2+0.2)/5
-            edep_normalized = edep_resized/edep_max/z_weights
+            edep_max = 4e-9#np.max(edep_resized)
+            edep_normalized, _ = data_normalization.normalize_examples(edep_resized, edep_max)
 
-            test_predictions = model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]])/0.1e-7*edep_max
+            test_predictions =  data_normalization.recover_labels(
+                model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]]), edep_max)
 
             photon_e_bins = np.logspace(np.log(l_e_lower), np.log(l_e_upper), l_e_bins+1, base=np.e)
             #print(photon_e_bins)
@@ -104,7 +105,7 @@ def main(args):
 
             prediction = test_predictions.reshape(l_y_bins, l_e_bins)
             prediction_c = prediction[int(l_y_bins/2)]
-            lt = ax.plot(photon_e_bins[:-1], prediction_c.clip(min=0), label = "prediction")[0]
+            lt = ax.plot(photon_e_bins[:-1], prediction_c, label = "prediction")[0]
             #pre_im = f3_ax2.imshow(prediction)
             #f3_ax2.set_title("prediction")
 
