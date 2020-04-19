@@ -4,7 +4,7 @@ import tensorflow as tf
 import os
 import matplotlib.pyplot as plt
 import preprocess_image
-import train_image_energy
+import train_image_energy_reusable
 from mpl_toolkits.mplot3d import Axes3D
 import argparse
 import toml
@@ -74,18 +74,20 @@ def main(args):
     plt.savefig("raw-"+name+".png")
 
     edep_resized = resize(edep, (y_bins, x_bins))
-    edep_max = np.max(edep_resized)
-    edep_normalized, edep_max = data_normalization.normalize_examples(edep_resized, edep_max)
+    print(edep_resized.shape)
+    edep_max = 0.1e-9*80#np.max(edep_resized)
+    edep_normalized, edep_max = data_normalization.normalize_examples_indi(
+        np.array([edep_resized]))
 
-    model = train_image_energy.build_model(1, x_bins, l_y_bins, l_e_bins)
+    model = train_image_energy_reusable.build_model(1, x_bins, l_y_bins, l_e_bins)
 
     checkpoint_path = args.model#"models/col-right-y-mixed-startover-cp.ckpt"
 
     # Loads the weights
     model.load_weights(checkpoint_path)
 
-    test_predictions = data_normalization.recover_labels(
-        model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]]), edep_max)
+    test_predictions = data_normalization.recover_labels_indi(
+        model.predict([[edep_normalized[0, int(y_bins/2), np.newaxis]]]), edep_max)
 
     common.setup_plot()
     fig3 = plt.figure(figsize=(3+3/8, 4+4/8), dpi=600, constrained_layout=True)
@@ -121,16 +123,16 @@ def main(args):
     f3_ax3.set_xlabel('Z (mm)')
     f3_ax3.set_ylabel('E (MeV)')
     #plot_e = edep_normalized
-    f3_ax3.plot(np.linspace(0, x_max, x_bins+1)[:-1], edep_normalized[int(y_bins/2)])
+    f3_ax3.plot(np.linspace(0, x_max, x_bins+1)[:-1], edep_normalized[0, int(y_bins/2)])
     f3_ax3.set_title("normalized energy deposition")
     #f3_ax3_c = fig3.add_subplot(gs[:, 1])
     #fig3.colorbar(im, cax=f3_ax3_c, shrink=0.6)
     #fig.subplots_adjust(right=0.8)
     #cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
     #fig.colorbar(truth_im, cax=cbar_ax)
-    
-    plt.savefig("reusable-"+args.out+"-"+name+".png")
-    np.savez("reusable-"+args.out+"-"+name+".npz", prediction=prediction)
+    model_folder = os.path.basename(os.path.dirname(checkpoint_path))
+    plt.savefig(model_folder+'/'+args.out+"-"+name+".png")
+    np.savez(model_folder+'/'+args.out+"-"+name+".npz", prediction=prediction)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

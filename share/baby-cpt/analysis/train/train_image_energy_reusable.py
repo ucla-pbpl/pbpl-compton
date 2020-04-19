@@ -11,12 +11,12 @@ import data_normalization
 def build_model(in_x, in_y, out_x, out_y):
     model = tf.keras.Sequential([
         tf.keras.layers.Flatten(input_shape=(in_x, in_y)),#input_shape=(in_x, in_y)
-        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False),
+        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation="relu"),
         #tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation='relu'),####### added
         #tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Dense(int(in_x*8*in_y), use_bias=False),
-        tf.keras.layers.Dense(int(in_x*4*in_y), use_bias=False),
-        tf.keras.layers.Dense(int(out_x*out_y*4), use_bias=False),
+        tf.keras.layers.Dense(int(in_x*8*in_y), use_bias=False, activation="relu"),
+        tf.keras.layers.Dense(int(in_x*4*in_y), use_bias=False, activation="relu"),
+        tf.keras.layers.Dense(int(out_x*out_y*4), use_bias=False, activation="relu"),
         tf.keras.layers.Dense(int(out_x*out_y)),#activation='relu'
         #tf.keras.layers.Dense(out_x*out_y)
     ])
@@ -60,24 +60,12 @@ def plot_preview(edep, truth, desc):
     plt.savefig(desc)
     plt.clf()
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Train network based on data file')
-    parser.add_argument("--data_file_name", required=True, nargs="+",
-        help="set where the training data comes from.")
-    parser.add_argument("--config", required=True, 
-        help="set dimensions of input and output data")
-    args = parser.parse_args()
-
-    common.setup_plot()
-
-    conf = toml.load(args.config)
+def load_data(conf, data_files):
     l_y_bins = int(conf['PrimaryGenerator']['YBins'])
     l_e_bins = int(conf['PrimaryGenerator']['EBins'])
     x_bins = int(conf['Simulation']['XBins'])
     y_bins = int(conf['Simulation']['YBins'])
 
-    data_files = args.data_file_name
     train_examples = np.zeros((1, 1, x_bins))
     print(train_examples.shape)
     train_labels = np.zeros((1, l_e_bins*l_y_bins))
@@ -104,17 +92,37 @@ def main():
     test_examples = test_examples[1:].astype(float)
     test_labels = test_labels[1:].astype(float)
 
+    return (train_examples, train_labels, test_examples, test_labels, name_string)
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Train network based on data file')
+    parser.add_argument("--data_file_name", required=True, nargs="+",
+        help="set where the training data comes from.")
+    parser.add_argument("--config", required=True, 
+        help="set dimensions of input and output data")
+    parser.add_argument("--out", required=True, 
+        help="output suffix")
+    args = parser.parse_args()
+
+    common.setup_plot()
+
+    conf = toml.load(args.config)
+    l_y_bins = int(conf['PrimaryGenerator']['YBins'])
+    l_e_bins = int(conf['PrimaryGenerator']['EBins'])
+    x_bins = int(conf['Simulation']['XBins'])
+    y_bins = int(conf['Simulation']['YBins'])
+
+    data_files = args.data_file_name
+    
+    train_examples, train_labels, test_examples, test_labels, name_string = load_data(conf, data_files)
+
     print("train_examples.shape, train_labels.shape", train_examples.shape, train_labels.shape)
 
     #normalization u
     train_shape = train_examples.shape
     test_shape = test_examples.shape
 
-    ratio = 0.01 #1.5e7
-
-    max_train = 0.1e-9#1.5e-9#np.max(train_examples.reshape(train_shape[0], train_shape[1]*train_shape[2]), axis = 1)
-    max_test = 0.1e-9#1.5e-9#np.max(test_examples.reshape(test_shape[0], test_shape[1]*test_shape[2]), axis = 1)
-    z_weights = (0.0006*np.linspace(0, 127, 128)**2+0.2)/5
     train_examples, _ = data_normalization.normalize_examples(train_examples)#/max_train/z_weights#[:, np.newaxis, np.newaxis]    
     train_labels = data_normalization.normalize_labels(train_labels)#/ratio#max_train#[:, np.newaxis]  #units??
     test_examples, _ = data_normalization.normalize_examples(test_examples)#/max_test/z_weights#[:, np.newaxis, np.newaxis] 
@@ -122,13 +130,18 @@ def main():
     print("train_examples[1][0][1]", train_examples[1][0][1])
     print("train_labels[1][1]", train_labels[1][1])
 
+    model_folder = "models-reusable"+"-"+args.out+"/"
+
+    if not os.path.exists(model_folder):
+        os.makedirs(model_folder)
+
     print(test_examples.shape, test_labels.shape)
     fig = plt.figure(figsize=(3+3/8, 2+2/8), dpi=600)
     ax = fig.add_subplot(1, 1, 1)
     ax.plot(test_labels.T,alpha=0.1)
     ax.set_xlabel("index")
     ax.set_ylabel("energy density (arb)")
-    plt.savefig("reusable-all-test-labels-weighted-"+name_string.replace("/", "")+".png")
+    plt.savefig(model_folder+"all-test-labels-"+name_string.replace("/", "")+"-"+args.out+".png")
     plt.clf()
     fig = plt.figure(figsize=(3+3/8, 2+2/8), dpi=600)
     ax = fig.add_subplot(1, 1, 1)
@@ -136,9 +149,9 @@ def main():
     ax.plot(test_examples_plot.T, alpha=0.1)
     ax.set_xlabel("index")
     ax.set_ylabel("energy deposition (arb)")
-    plt.savefig("reusable-all-test-examples-weighted-"+name_string.replace("/", "")+".png")
+    plt.savefig(model_folder+"all-test-examples-"+name_string.replace("/", "")+"-"+args.out+".png")
     plt.clf()
-    
+
     labels_max = np.max(test_labels, axis=1)
     average_max = np.average(labels_max)
     print("averaged_label_max", average_max)
@@ -158,7 +171,7 @@ def main():
     model = build_model(1, x_bins, l_y_bins, l_e_bins)
     print(model.summary())
 
-    checkpoint_path = "models-reusable/"+name_string+".ckpt"
+    checkpoint_path = model_folder+name_string+".ckpt"
     #checkpoint_dir = os.path.dirname(checkpoint_path)
 
     # Create a callback that saves the model's weights
@@ -200,7 +213,7 @@ def main():
         #print(-100+(x-3)*31*5)
         #plt.plot([-100+(x-3)*31, 31*50+(x-3)*31], [-100-(x-3)*31, 31*50-(x-3)*31], c='red')
         plt.plot([-100, l_y_bins*l_e_bins], [-100, l_y_bins*l_e_bins], c='red')
-    plt.savefig("reusable"+name_string+".png")
+    plt.savefig(model_folder+name_string+"-"+args.out+".png")
 
 
 if __name__ == "__main__":

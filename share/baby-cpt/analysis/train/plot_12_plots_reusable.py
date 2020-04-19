@@ -36,7 +36,7 @@ def main(args):
     l_y_upper = conf['PrimaryGenerator']['YUpper']
     l_e_upper = conf['PrimaryGenerator']['EUpper']
 
-    model = train_image_energy.build_model(1, x_bins, l_y_bins, l_e_bins)
+    model = train_image_energy_reusable.build_model(1, x_bins, l_y_bins, l_e_bins)
 
     checkpoint_path = args.model#"models/col-right-y-mixed-startover-cp.ckpt"
 
@@ -44,11 +44,11 @@ def main(args):
     model.load_weights(checkpoint_path)
 
     names = ["long_proper_interp_3p-VE76Y2-400", "long_proper_interp_3p-VE76Y2-500"  
-        , "long_proper_interp_3p-VE76Y2-900"   , "long_proper_interp_3p-VE76Y2-1100"   
-        , "long_proper_interp_3p-VE76Y2-1200", "long_proper_interp_random-7EURS8-400"  
+        , "long_proper_interp_3p-VE76Y2-900"   , "long_ht_3p-N7Z2HX-1100"   
+        , "long_ht_3p-N7Z2HX-1200", "long_proper_interp_random-7EURS8-400"  
         , "long_proper_interp_g-U7VVC3-100", "long_proper_interp_g-U7VVC3-400"
-        , "long_proper_interp_g-U7VVC3-600", "long_proper_interp_g-U7VVC3-1000"
-        , "long_proper_interp_g-U7VVC3-1600","long_proper_interp_g-U7VVC3-1800"]  
+        , "long_proper_interp_g-U7VVC3-600", "long_ht_n_g-0JI20Q-1000"
+        , "long_ht_n_g-0JI20Q-1600","long_ht_n_7g-X1D4ZO-1600"]  
 
     common.setup_plot()
 
@@ -87,11 +87,12 @@ def main(args):
             #plt.savefig("raw-"+name+".png")
 
             edep_resized = resize(edep, (y_bins, x_bins))
-            edep_max = np.max(edep_resized)*80
-            edep_normalized, _ = data_normalization.normalize_examples(edep_resized, edep_max)
+            #edep_max = np.max(edep_resized)
+            edep_normalized, edep_max = data_normalization.normalize_examples_indi(
+                np.array([edep_resized]))
 
-            test_predictions =  data_normalization.recover_labels(
-                model.predict([[edep_normalized[int(y_bins/2), np.newaxis]]]), edep_max)
+            test_predictions =  data_normalization.recover_labels_indi(
+                model.predict([[edep_normalized[0, int(y_bins/2), np.newaxis]]]), edep_max)
 
             photon_e_bins = np.logspace(np.log(l_e_lower), np.log(l_e_upper), l_e_bins+1, base=np.e)
             #print(photon_e_bins)
