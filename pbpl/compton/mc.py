@@ -60,13 +60,13 @@ class PrimaryGeneratorAction(g4.G4VUserPrimaryGeneratorAction):
         try:
             particle_name, position, direction, energy = next(self.generator)
             self.pg.SetParticleByName(particle_name)
+#            self.pg.SetParticlePolarization(g4.G4ThreeVector(0, 1, 0))
             self.pg.SetParticlePosition(position)
             self.pg.SetParticleMomentumDirection(direction)
             self.pg.SetParticleEnergy(energy)
             self.pg.GeneratePrimaryVertex(event)
         except StopIteration:
             event.SetEventAborted()
-
 
 class MyRunAction(g4.G4UserRunAction):
     "My Run Action"
@@ -76,7 +76,6 @@ class MyRunAction(g4.G4UserRunAction):
 
     def EndOfRunAction(self, run):
         pass
-
 
 class StatusEventAction(g4.G4UserEventAction):
     "Status Event Action"
@@ -102,7 +101,6 @@ class StatusEventAction(g4.G4UserEventAction):
             self.prev_time = curr_time
         self.count += 1
 
-
 class MySteppingAction(g4.G4UserSteppingAction):
     "My Stepping Action"
 
@@ -119,16 +117,10 @@ class SimpleDepositionSD(g4.G4VSensitiveDetector):
         self.position = []
         self.edep = []
 
-    def Initialize(self, hit_collection):
-        pass
-
     def ProcessHits(self, step, history):
         self.position.append(
             G4ThreeVector_to_list(step.GetPreStepPoint().GetPosition()))
         self.edep.append(step.GetTotalEnergyDeposit())
-
-    def EndOfEvent(self, hit_collection):
-        pass
 
     def finalize(self, num_events):
         path = os.path.dirname(self.filename)
@@ -158,15 +150,10 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
         self.position = []
         self.edep = []
 
-    def Initialize(self, hit_collection):
-        pass
-
     def ProcessHits(self, step, history):
         self.position.append(
             G4ThreeVector_to_list(step.GetPreStepPoint().GetPosition()))
         self.edep.append(step.GetTotalEnergyDeposit())
-
-    def EndOfEvent(self, hit_collection):
         if len(self.edep) > self.update_interval:
             self.update_histo()
 
@@ -207,9 +194,6 @@ class TransmissionSD(g4.G4VSensitiveDetector):
         self.particles = particles
         self.results = { p:TransmissionResult([], [], []) for p in particles }
 
-    def Initialize(self, hit_collection):
-        pass
-
     def ProcessHits(self, step, history):
         proc = step.GetPostStepPoint().GetProcessDefinedStep()
         if (proc == None) or (proc.GetProcessName() != 'Transportation'):
@@ -224,9 +208,6 @@ class TransmissionSD(g4.G4VSensitiveDetector):
                 G4ThreeVector_to_list(point.GetMomentumDirection()))
             result.energy.append(point.GetKineticEnergy())
 
-    def EndOfEvent(self, hit_collection):
-        pass
-
     def finalize(self, num_events):
         path = os.path.dirname(self.filename)
         if path != '':
@@ -240,6 +221,35 @@ class TransmissionSD(g4.G4VSensitiveDetector):
         fout['num_events'] = num_events
         fout.close()
 
+class FlagSD(g4.G4VSensitiveDetector):
+    def __init__(self, name, conf):
+        g4.G4VSensitiveDetector.__init__(self, name)
+        self.M = compton.build_transformation(conf['Transformation'], mm, deg)
+        aeval = asteval.Interpreter(use_numpy=True)
+        for q in g4.hepunit.__dict__:
+            aeval.symtable[q] = g4.hepunit.__dict__[q]
+        self.vol = np.array((conf['Volume']))*mm
+        self.threshold = conf['Threshold']*MeV
+        self.curr_event = -1
+
+    def ProcessHits(self, step, history):
+        event_id = g4.gEventManager.GetConstCurrentEvent().GetEventID()
+        if event_id != self.curr_event:
+            self.curr_event = event_id
+            self.tally = 0
+        x = G4ThreeVector_to_list(step.GetPreStepPoint().GetPosition())
+        Mx = compton.transform(self.M, np.array(x))
+        if self.tally < self.threshold:
+            if compton.in_volume(self.vol, np.array((Mx,)))[0]:
+                self.tally += step.GetTotalEnergyDeposit()
+                if self.tally >= self.threshold:
+                    print('yep...')
+                    g4.gApplyUICommand('/event/keepCurrentEvent')
+
+    def finalize(self, num_events):
+        print('FINALIZE')
+        g4.gApplyUICommand('/vis/enable')
+        g4.gApplyUICommand('/vis/viewer/flush')
 
 def depth_first_tree_traversal(node):
     q = deque()
@@ -255,7 +265,6 @@ def depth_first_tree_traversal(node):
             yield v
     while q:
         yield from depth_first_tree_traversal(q.popleft())
-
 
 class MyGeometry(g4.G4VUserDetectorConstruction):
     def __init__(self, conf):
@@ -353,7 +362,6 @@ class MyGeometry(g4.G4VUserDetectorConstruction):
         sys.exit()
         pass
 
-
 def create_fields(conf):
     result = {}
 
@@ -399,6 +407,8 @@ def create_detectors(conf):
             sd = BinnedDepositionSD('pbpl/' + name, c)
         elif sd_type == 'TransmissionSD':
             sd = TransmissionSD('pbpl/' + name, c['File'], c['Particles'])
+        elif sd_type == 'FlagSD':
+            sd = FlagSD('pbpl/' + name, c)
         else:
             raise ValueError(
                 "unimplemented Detector type '{}'".format(sd_type))
