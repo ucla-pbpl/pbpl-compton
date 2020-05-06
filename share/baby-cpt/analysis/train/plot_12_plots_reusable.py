@@ -23,8 +23,8 @@ def preprocess_summed_h5(filename, config_file):
     edep_normalized = edep_resized/edep_max
     return (edep_normalized, edep_max)
 
-def main(args):
-    conf = toml.load(args.config)
+def main(config):
+    conf = toml.load(config)
     x_max = int(conf['Simulation']['XMax'])
     x_bins = int(conf['Simulation']['XBins'])
     y_max = int(conf['Simulation']['YMax'])
@@ -36,9 +36,15 @@ def main(args):
     l_y_upper = conf['PrimaryGenerator']['YUpper']
     l_e_upper = conf['PrimaryGenerator']['EUpper']
 
-    model = train_image_energy_reusable.build_model(1, x_bins, l_y_bins, l_e_bins)
+    model = train_image_energy_reusable.build_model(conf)
 
-    checkpoint_path = args.model#"models/col-right-y-mixed-startover-cp.ckpt"
+    args_out = conf['NeuralNetwork']["ModelName"]
+    data_files = conf['NeuralNetwork']["DataFileNames"]
+    name_string=""
+    name_string=name_string.join(data_files).replace("/", "")
+    model_path = "models-grid"+"-"+args_out+"/"+name_string+".ckpt"
+
+    checkpoint_path = model_path#"models/col-right-y-mixed-startover-cp.ckpt"
 
     # Loads the weights
     model.load_weights(checkpoint_path)
@@ -88,10 +94,10 @@ def main(args):
 
             edep_resized = resize(edep, (y_bins, x_bins))
             #edep_max = np.max(edep_resized)
-            edep_normalized, edep_max = data_normalization.normalize_examples_indi(
+            edep_normalized, edep_max = data_normalization.normalize_examples_indi(conf,
                 np.array([edep_resized]))
 
-            test_predictions =  data_normalization.recover_labels_indi(
+            test_predictions =  data_normalization.recover_labels_indi(conf,
                 model.predict([[edep_normalized[0, int(y_bins/2), np.newaxis]]]), edep_max)
 
             photon_e_bins = np.logspace(np.log(l_e_lower), np.log(l_e_upper), l_e_bins+1, base=np.e)
@@ -122,18 +128,13 @@ def main(args):
            )
     fig.suptitle("     ")
     model_folder = os.path.basename(os.path.dirname(checkpoint_path))
-    plt.savefig(model_folder+'/'+args.out+".png")
+    plt.savefig(model_folder+'/12-plots-'+args_out+".png")
     #np.savez(args.out+"-"+name+".npz", prediction=prediction)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Predict gamma spectra based on spectrometer data.')
-    parser.add_argument("--model", required=True,
-        help="path to saved tensorflow model")
     parser.add_argument("--config", required=True,
         help="the config toml file")
-    parser.add_argument("--out", required=True,
-        help="output file name suffix")
-
     args = parser.parse_args()
     main(args)

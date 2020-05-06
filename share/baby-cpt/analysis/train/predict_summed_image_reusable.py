@@ -76,17 +76,17 @@ def main(args):
     edep_resized = resize(edep, (y_bins, x_bins))
     print(edep_resized.shape)
     edep_max = 0.1e-9*80#np.max(edep_resized)
-    edep_normalized, edep_max = data_normalization.normalize_examples_indi(
+    edep_normalized, edep_max = data_normalization.normalize_examples_indi(conf,
         np.array([edep_resized]))
 
-    model = train_image_energy_reusable.build_model(1, x_bins, l_y_bins, l_e_bins)
+    model = train_image_energy_reusable.build_model(conf)
 
     checkpoint_path = args.model#"models/col-right-y-mixed-startover-cp.ckpt"
 
     # Loads the weights
     model.load_weights(checkpoint_path)
 
-    test_predictions = data_normalization.recover_labels_indi(
+    test_predictions = data_normalization.recover_labels_indi(conf,
         model.predict([[edep_normalized[0, int(y_bins/2), np.newaxis]]]), edep_max)
 
     common.setup_plot()

@@ -4,24 +4,42 @@ import os
 import matplotlib.pyplot as plt
 import argparse
 import toml
-import prediction_callback
+import log_callback
 from pbpl import common
 import data_normalization
 
-def build_model(in_x, in_y, out_x, out_y):
-    model = tf.keras.Sequential([
-        tf.keras.layers.Flatten(input_shape=(in_x, in_y)),#input_shape=(in_x, in_y)
-        tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation="relu"),
-        #tf.keras.layers.Dense(int(in_x*16*in_y), use_bias=False, activation='relu'),####### added
-        #tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Dense(int(in_x*8*in_y), use_bias=False, activation="relu"),
-        tf.keras.layers.Dense(int(in_x*4*in_y), use_bias=False, activation="relu"),
-        tf.keras.layers.Dense(int(out_x*out_y*4), use_bias=False, activation="relu"),
-        tf.keras.layers.Dense(int(out_x*out_y)),#activation='relu'
-        #tf.keras.layers.Dense(out_x*out_y)
-    ])
+def build_model(conf): #in_x, in_y, out_x, out_y
+    out_x = int(conf['PrimaryGenerator']['YBins'])
+    out_y = int(conf['PrimaryGenerator']['EBins'])
+    in_x = 1 #int(conf['Simulation']['YBins'])
+    in_y = int(conf['Simulation']['XBins'])
 
-    optimizer = tf.keras.optimizers.RMSprop(0.001)
+    #Layers = [2048, 1024, 512, 512]
+    #Biases = ["False", "False", "False", "False", "False"]
+    #Activations = ["relu", "relu", "relu", "relu", "linear"]
+    #LearningRate = 0.001
+
+    layers = conf['NeuralNetwork']["Layers"]
+    activations = conf["NeuralNetwork"]["Activations"]
+    biases = conf["NeuralNetwork"]["Biases"]
+    learning_rate = conf["NeuralNetwork"]["LearningRate"]
+    sequence = [tf.keras.layers.Flatten(input_shape=(in_x, in_y))]
+    i=0
+    for i in range(len(layers)):
+        use_bias = True
+        if biases[i] == "False":
+            use_bias = False 
+        sequence.append(
+            tf.keras.layers.Dense(int(layers[i]), use_bias=use_bias, activation=activations[i])
+        )
+    use_bias = True
+    if biases[i] == "False":
+        use_bias = False 
+    sequence.append(
+        tf.keras.layers.Dense(int(out_x*out_y), use_bias=use_bias, 
+        activation=activations[i]))
+    model = tf.keras.Sequential(sequence)
+    optimizer = tf.keras.optimizers.RMSprop(learning_rate)
 
     model.compile(loss='mse',
                 optimizer=optimizer,
@@ -94,27 +112,18 @@ def load_data(conf, data_files):
 
     return (train_examples, train_labels, test_examples, test_labels, name_string)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description='Train network based on data file')
-    parser.add_argument("--data_file_name", required=True, nargs="+",
-        help="set where the training data comes from.")
-    parser.add_argument("--config", required=True, 
-        help="set dimensions of input and output data")
-    parser.add_argument("--out", required=True, 
-        help="output suffix")
-    args = parser.parse_args()
+def main(config): #config
 
     common.setup_plot()
 
-    conf = toml.load(args.config)
+    conf = toml.load(config)
     l_y_bins = int(conf['PrimaryGenerator']['YBins'])
     l_e_bins = int(conf['PrimaryGenerator']['EBins'])
     x_bins = int(conf['Simulation']['XBins'])
     y_bins = int(conf['Simulation']['YBins'])
 
-    data_files = args.data_file_name
-    
+    data_files = conf['NeuralNetwork']["DataFileNames"]
+    args_out = conf['NeuralNetwork']["ModelName"]
     train_examples, train_labels, test_examples, test_labels, name_string = load_data(conf, data_files)
 
     print("train_examples.shape, train_labels.shape", train_examples.shape, train_labels.shape)
@@ -123,14 +132,14 @@ def main():
     train_shape = train_examples.shape
     test_shape = test_examples.shape
 
-    train_examples, _ = data_normalization.normalize_examples(train_examples)#/max_train/z_weights#[:, np.newaxis, np.newaxis]    
-    train_labels = data_normalization.normalize_labels(train_labels)#/ratio#max_train#[:, np.newaxis]  #units??
-    test_examples, _ = data_normalization.normalize_examples(test_examples)#/max_test/z_weights#[:, np.newaxis, np.newaxis] 
-    test_labels = data_normalization.normalize_labels(test_labels)#/ratio#max_test#[:, np.newaxis]
+    train_examples, _ = data_normalization.normalize_examples(conf, train_examples)#/max_train/z_weights#[:, np.newaxis, np.newaxis]    
+    train_labels = data_normalization.normalize_labels(conf, train_labels)#/ratio#max_train#[:, np.newaxis]  #units??
+    test_examples, _ = data_normalization.normalize_examples(conf, test_examples)#/max_test/z_weights#[:, np.newaxis, np.newaxis] 
+    test_labels = data_normalization.normalize_labels(conf, test_labels)#/ratio#max_test#[:, np.newaxis]
     print("train_examples[1][0][1]", train_examples[1][0][1])
     print("train_labels[1][1]", train_labels[1][1])
 
-    model_folder = "models-reusable"+"-"+args.out+"/"
+    model_folder = "models-grid"+"-"+args_out+"/"
 
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
@@ -141,7 +150,7 @@ def main():
     ax.plot(test_labels.T,alpha=0.1)
     ax.set_xlabel("index")
     ax.set_ylabel("energy density (arb)")
-    plt.savefig(model_folder+"all-test-labels-"+name_string.replace("/", "")+"-"+args.out+".png")
+    plt.savefig(model_folder+"all-test-labels-"+name_string.replace("/", "")+"-"+args_out+".png")
     plt.clf()
     fig = plt.figure(figsize=(3+3/8, 2+2/8), dpi=600)
     ax = fig.add_subplot(1, 1, 1)
@@ -149,7 +158,7 @@ def main():
     ax.plot(test_examples_plot.T, alpha=0.1)
     ax.set_xlabel("index")
     ax.set_ylabel("energy deposition (arb)")
-    plt.savefig(model_folder+"all-test-examples-"+name_string.replace("/", "")+"-"+args.out+".png")
+    plt.savefig(model_folder+"all-test-examples-"+name_string.replace("/", "")+"-"+args_out+".png")
     plt.clf()
 
     labels_max = np.max(test_labels, axis=1)
@@ -168,7 +177,7 @@ def main():
     test_dataset = test_dataset.batch(BATCH_SIZE)
 
 
-    model = build_model(1, x_bins, l_y_bins, l_e_bins)
+    model = build_model(conf)
     print(model.summary())
 
     checkpoint_path = model_folder+name_string+".ckpt"
@@ -184,12 +193,11 @@ def main():
 
     # The patience parameter is the amount of epochs to check for improvement
     early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20)
-    prediction_cb = prediction_callback.EarlyStoppingWhenOutputRepeats(patience=10, 
-        config_file = args.config, slice_index = int(x_bins/2))
+    log_cb = log_callback.LogCallback(model_folder+"log.txt")
 
     # Train the model with the new callback
-    model.fit(train_dataset, epochs=10000, validation_data=test_dataset, 
-            callbacks=[cp_callback, early_stop])#, prediction_cb
+    model.fit(train_dataset, epochs=1000, validation_data=test_dataset, 
+            callbacks=[cp_callback, early_stop, log_cb])#, prediction_cb
 
     #print(model.evaluate(test_dataset))
     #print("Trained model, accuracy: {:5.2f}%".format(100*acc))
@@ -213,8 +221,13 @@ def main():
         #print(-100+(x-3)*31*5)
         #plt.plot([-100+(x-3)*31, 31*50+(x-3)*31], [-100-(x-3)*31, 31*50-(x-3)*31], c='red')
         plt.plot([-100, l_y_bins*l_e_bins], [-100, l_y_bins*l_e_bins], c='red')
-    plt.savefig(model_folder+name_string+"-"+args.out+".png")
+    plt.savefig(model_folder+name_string+"-"+args_out+".png")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description='Train network based on data file')
+    parser.add_argument("--config", required=True, 
+        help="set dimensions of input and output data")
+    args = parser.parse_args()
+    main(args.config)

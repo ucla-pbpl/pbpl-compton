@@ -1,13 +1,12 @@
 import numpy as np
 
 z_weights = (0.0006*np.linspace(0, 127, 128)**2+0.2)/5
-default_max_ex=0.1e-9*80
 
-
-def normalize_examples(examples):
+def normalize_examples(conf, examples):
      #0-1-2
     #max_ex = 0.1e-9
     print(examples.shape)
+    default_max_ex = conf['NeuralNetwork']["DefaultMaxEx"]
     print("data_normalization normalize: max_ex", default_max_ex)
     normalized = examples/default_max_ex/z_weights*80
     print("max normalized: ", np.max(normalized))
@@ -15,7 +14,7 @@ def normalize_examples(examples):
     print(normalized.shape)
     return (normalized-center, default_max_ex)
 
-def normalize_examples_indi(examples): #n, 64, 128
+def normalize_examples_indi(conf, examples): #n, 64, 128
     count = examples.shape[0]
     print(count)
     examples_flattened = examples.reshape(count, -1)#N, 128*64
@@ -27,21 +26,25 @@ def normalize_examples_indi(examples): #n, 64, 128
     print(max_ex)
     return (weighted, max_ex)
     
-def normalize_labels(labels):
-    ratio = 0.01 #1.5e7
-    return labels/ratio
+def normalize_labels(conf, labels):
+     #1.5e7
+    default_ratio = conf['NeuralNetwork']["DefaultRatio"]
+    return labels/default_ratio
 
-def recover_labels(predicted):
+def recover_labels(conf, predicted):
     print("data_normalization recover: max_ex", max_ex)
-    labels=predicted*0.01
+    default_ratio = conf['NeuralNetwork']["DefaultRatio"]
+    labels=predicted*default_ratio
     print("max labels: ", np.max(labels))
     return labels
 
-def recover_labels_indi(predicted, max_ex): #N, 128 || N
+def recover_labels_indi(conf, predicted, max_ex): #N, 128 || N
+    default_max_ex = conf['NeuralNetwork']["DefaultMaxEx"]
+    default_ratio = conf['NeuralNetwork']["DefaultRatio"]
     print(predicted.shape)
     print("data_normalization recover: max_ex", max_ex)
     print("ratio ", max_ex/default_max_ex)
-    labels=((predicted.T)*0.01*max_ex/default_max_ex).T
+    labels=((predicted.T)*default_ratio*max_ex/default_max_ex).T
     print("max labels: ", np.max(labels))
     return labels
     
