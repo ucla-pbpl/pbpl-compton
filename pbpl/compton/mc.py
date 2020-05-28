@@ -149,6 +149,10 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
         self.update_interval = self.hist.size
         self.position = []
         self.edep = []
+        try:
+            os.unlink(self.filename)
+        except OSError as e:
+            pass
 
     def ProcessHits(self, step, history):
         self.position.append(
@@ -171,7 +175,7 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
         path = os.path.dirname(self.filename)
         if path != '':
             os.makedirs(path, exist_ok=True)
-        fout = h5py.File(self.filename, 'w')
+        fout = h5py.File(self.filename, 'a')
         if self.groupname is not None:
             gout = fout.create_group(self.groupname)
         else:
@@ -243,11 +247,9 @@ class FlagSD(g4.G4VSensitiveDetector):
             if compton.in_volume(self.vol, np.array((Mx,)))[0]:
                 self.tally += step.GetTotalEnergyDeposit()
                 if self.tally >= self.threshold:
-                    print('yep...')
                     g4.gApplyUICommand('/event/keepCurrentEvent')
 
     def finalize(self, num_events):
-        print('FINALIZE')
         g4.gApplyUICommand('/vis/enable')
         g4.gApplyUICommand('/vis/viewer/flush')
 
@@ -327,6 +329,8 @@ class MyGeometry(g4.G4VUserDetectorConstruction):
                         rotation.rotateY(value*deg)
                     elif operation == 'RotateZ':
                         rotation.rotateZ(value*deg)
+                    else:
+                        assert(False)
                     transform = (
                         g4.G4Transform3D(rotation, translation)*transform)
             if 'Rotation' in geom:
