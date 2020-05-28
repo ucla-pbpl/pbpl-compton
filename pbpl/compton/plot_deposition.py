@@ -94,7 +94,8 @@ def plot_deposition_2d(filename, conf, edep, num_events, xbin, ybin, zbin):
     image = ax.imshow(
         plot_val, cmap=common.blue_cmap,
         extent=(zbin[0]/mm, zbin[-1]/mm, ybin[0]/mm, ybin[-1]/mm),
-        vmax=vmax, aspect='equal', interpolation='none')  #'auto')
+        vmax=vmax, aspect='equal', interpolation='none',
+        origin='lower')
     cb = fig.colorbar(image, shrink=0.95)
     cb.set_label(cb_label, rotation=270, labelpad=10)
 
