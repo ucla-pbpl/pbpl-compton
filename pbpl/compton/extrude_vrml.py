@@ -5,6 +5,12 @@ from argparse import RawDescriptionHelpFormatter
 import numpy as np
 import re as regex
 
+def add_bool_arg(parser, name, default=False, help=None):
+    group = parser.add_mutually_exclusive_group(required=False)
+    group.add_argument('--' + name, action='store_true', help=help)
+    group.add_argument('--no-' + name, action='store_false')
+    parser.set_defaults(**{name:default})
+
 def get_parser():
     parser = argparse.ArgumentParser(
         formatter_class=RawDescriptionHelpFormatter,
@@ -21,6 +27,9 @@ def get_parser():
     parser.add_argument(
         '--num-points', metavar='INT', type=int, default=8,
         help='Number of points in circular cross section (default=8)')
+    add_bool_arg(
+        parser, 'name-solids', False,
+        'Use Geant4 volume names in VRML (default=no)')
     parser.add_argument(
         'input', metavar='INPUT', type=str,
         help='Input filename (VRML format)')
@@ -49,11 +58,22 @@ def extrude(vin, num_points, r0):
     vout = p.sub(repl, vin)
     return vout
 
+def name_solids(vin):
+    p = regex.compile(
+        r'#---------- SOLID: (\S+)\s+Shape {')
+    def repl(m):
+        result = 'DEF ' + m.group(1) + ' Shape {'
+        return result
+    vout = p.sub(repl, vin)
+    return vout
+
 def main():
     args = get_args()
     with open(args.input, 'r') as fin:
         vin = fin.read()
     vout = extrude(vin, args.num_points, args.radius)
+    if args.name_solids:
+        vout = name_solids(vout)
     with open(args.output, 'w') as fout:
         fout.write(vout)
 
