@@ -1,6 +1,7 @@
 // -*- mode: c++; c-file-style: "stroustrup"; c-basic-offset: 4 -*-
 #include "PhysicsListEMstd.h"
 
+#include <G4SystemOfUnits.hh>
 #include <G4ProcessManager.hh>
 #include <G4ParticleDefinition.hh>
 
@@ -17,6 +18,9 @@
 #include <G4eIonisation.hh>
 #include <G4eBremsstrahlung.hh>
 #include <G4eplusAnnihilation.hh>
+
+#include <G4KleinNishinaModel.hh>
+#include <G4LowEPPolarizedComptonModel.hh>
 
 
 PhysicsListEMstd::PhysicsListEMstd() : G4VPhysicsConstructor("EM-std")
@@ -39,9 +43,18 @@ void PhysicsListEMstd::ConstructProcess()
     G4ProcessManager* pm;
 
     // gamma physics
+
+    // G4ComptonScattering* cs = new G4ComptonScattering;
+    // cs->SetEmModel(new G4KleinNishinaModel());
+    // G4VEmModel* theLowEPPolarizedComptonModel =
+    //     new G4LowEPPolarizedComptonModel();
+    // theLowEPPolarizedComptonModel->SetHighEnergyLimit(20*MeV);
+    // cs->AddEmModel(0, theLowEPPolarizedComptonModel);
+
     pm = G4Gamma::Gamma()-> GetProcessManager();
     pm-> AddDiscreteProcess(new G4PhotoElectricEffect);
     pm-> AddDiscreteProcess(new G4ComptonScattering);
+    // pm-> AddDiscreteProcess(cs);
     pm-> AddDiscreteProcess(new G4GammaConversion);
 
     // electron physics
