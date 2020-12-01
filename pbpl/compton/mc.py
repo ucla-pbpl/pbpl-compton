@@ -145,14 +145,16 @@ class MyTrackingAction(g4.G4UserTrackingAction):
         else:
             parent_node = track.GetParentID()
 
-        tracking_tree.create_node(
-            identifier=track.GetTrackID(),
-            parent=parent_node,
-            data=TrackingNode(
-                track.GetDefinition().GetParticleName(),
-                process,
-                track.GetVolume().GetName(),
-                track.GetKineticEnergy()))
+        if not track.GetTrackID() in tracking_tree:
+            tracking_tree.create_node(
+                identifier=track.GetTrackID(),
+                parent=parent_node,
+                data=TrackingNode(
+                    track.GetDefinition().GetParticleName(),
+                    process,
+                    track.GetVolume().GetName(),
+                    track.GetKineticEnergy()))
+
 
 class MySteppingAction(g4.G4UserSteppingAction):
     "My Stepping Action"
@@ -517,6 +519,51 @@ def create_fields(conf):
         result[name] = field
     return result
 
+def create_materials(conf):
+    result = {}
+
+    if 'Materials' not in conf:
+        return result
+
+    for name in (conf['Materials']):
+        c = conf['Materials'][name]
+        mat = g4.gNistManager.FindOrBuildMaterial(name)
+        if mat is None:
+            atoms = c['AtomicComposition']
+            mat = g4.G4Material(name, c['Density']*gram/cm**3, len(atoms[0]))
+            for atom_name, num_atoms in zip(*atoms):
+                mat.AddElement(
+                    g4.gNistManager.FindOrBuildElement(atom_name),
+                    num_atoms)
+        for property_name in c['Properties']:
+            property_table = mat.GetMaterialPropertiesTable()
+            if property_table is None:
+                property_table = compton.G4MaterialPropertiesTable()
+                mat.SetMaterialPropertiesTable(property_table)
+            property_conf = c['Properties'][property_name]
+            if 'Value' in property_conf:
+                property_table.AddConstProperty(
+                    property_name, property_conf['Value'])
+            else:
+                values = np.array(property_conf['Values'])
+                if 'PhotonEnergies' in property_conf:
+                    photon_energies = np.array(
+                        property_conf['PhotonEnergies']) * eV
+                else:
+                    photon_wavelengths = np.array(
+                        property_conf['PhotonWavelengths']) * nanometer
+                    photon_energies = h_Planck*c_light/photon_wavelengths
+                assert(len(values) == len(photon_energies))
+                idx = photon_energies.argsort()
+                photon_energies = photon_energies[idx]
+                values = values[idx]
+                property_table.AddProperty(
+                    property_name, photon_energies, values)
+
+        result[name] = mat
+    return result
+
+
 def create_detectors(conf):
     global geom_l
     result = {}
@@ -614,6 +661,13 @@ def main():
     fields = create_fields(args.conf)
 
     g4.gRunManager.Initialize()
+
+    global materials
+    materials = create_materials(args.conf)
+    # for mat in materials.values():
+    #     property_table = mat.GetMaterialPropertiesTable()
+    #     if property_table is not None:
+    #         property_table.DumpTable()
 
     global detectors
     detectors = create_detectors(args.conf)
