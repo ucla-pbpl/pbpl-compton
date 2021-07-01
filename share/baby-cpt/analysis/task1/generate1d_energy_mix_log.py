@@ -103,18 +103,18 @@ def generate_mix(edep, num_events, energy_ranges, x_max,
     for i in range(0, num):
         
         e_component_weights = np.stack((#get_weights_gaussian(l_e_bins, 0.2),
-                            get_weights_gaussian(l_e_bins, 20),
+                            #get_weights_gaussian(l_e_bins, 20),
                             get_weights_gaussian(l_e_bins, 12), 
                             #get_weights_cosine(l_e_bins)*0.1, 
                             #get_weights_random(l_e_bins)*0.1, 
                             get_weights_gaussian(l_e_bins, 40), 
-                            get_weights_gaussian(l_e_bins, 30),
+                            #get_weights_gaussian(l_e_bins, 30),
                             get_weights_gaussian(l_e_bins, 20),
-                            get_weights_gaussian(l_e_bins, 7),
-                            get_weights_gaussian(l_e_bins, 30),
+                            #get_weights_gaussian(l_e_bins, 7),
+                            #get_weights_gaussian(l_e_bins, 30),
                             #get_weights_gaussian(l_e_bins, 0.2),
                             ))
-        function_weights = np.random.rand(7)
+        function_weights = np.random.rand(3)
         e_float_weights = ((np.dot(e_component_weights.T, function_weights)).T)*1#1e9
         e_weights = e_float_weights/np.max(e_float_weights)#.astype(int)
         #want this to be energy_density. 
