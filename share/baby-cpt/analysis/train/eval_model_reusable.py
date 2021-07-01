@@ -56,4 +56,4 @@ if __name__ == "__main__":
     parser.add_argument("--config", required=True, 
         help="set dimensions of input and output data")
     args = parser.parse_args()
-    main(args)
+    main(args.config)

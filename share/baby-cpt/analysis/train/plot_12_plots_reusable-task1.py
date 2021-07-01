@@ -49,12 +49,12 @@ def main(config):
     # Loads the weights
     model.load_weights(checkpoint_path)
 
-    names = ["long_ht_n_7g-I0SG25-200", "long_ht_n_7g-I0SG25-300"  
-        , "long_ht_n_7g-I0SG25-400"   , "long_ht_n_7g-I0SG25-500"   
-        , "long_ht_n_g-5A7FW1-400", "long_ht_g-D8LK5F-500"  
-        , "long_ht_n_g-5A7FW1-600", "long_ht_g-D8LK5F-700"
-        , "long_ht_n_3p-KTOMQ9-1000", "long_ht_3p-PUEZSJ-900"
-        , "long_ht_n_3p-KTOMQ9-800","long_ht_3p-PUEZSJ-700"]  
+    names = ["long_proper_interp_3p-VE76Y2-400", "long_proper_interp_3p-VE76Y2-500"  
+        , "long_proper_interp_3p-VE76Y2-900"   , "long_ht_3p-N7Z2HX-1100"   
+        , "long_ht_3p-N7Z2HX-1200", "long_proper_interp_random-7EURS8-400"  
+        , "long_proper_interp_g-U7VVC3-100", "long_proper_interp_g-U7VVC3-400"
+        , "long_proper_interp_g-U7VVC3-600", "long_ht_n_g-0JI20Q-1000"
+        , "long_ht_n_g-0JI20Q-1600","long_ht_n_7g-X1D4ZO-1600"]  
 
     common.setup_plot()
 
@@ -137,4 +137,4 @@ if __name__ == "__main__":
     parser.add_argument("--config", required=True,
         help="the config toml file")
     args = parser.parse_args()
-    main(args.config)
+    main(args)

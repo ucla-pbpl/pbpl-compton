@@ -49,12 +49,12 @@ def main(config):
     # Loads the weights
     model.load_weights(checkpoint_path)
 
-    names = ["long_ht_n_7g-I0SG25-200", "long_ht_n_7g-I0SG25-300"  
-        , "long_ht_n_7g-I0SG25-400"   , "long_ht_n_7g-I0SG25-500"   
-        , "long_ht_n_g-5A7FW1-400", "long_ht_g-D8LK5F-500"  
-        , "long_ht_n_g-5A7FW1-600", "long_ht_g-D8LK5F-700"
-        , "long_ht_n_3p-KTOMQ9-1000", "long_ht_3p-PUEZSJ-900"
-        , "long_ht_n_3p-KTOMQ9-800","long_ht_3p-PUEZSJ-700"]  
+    names = ["low_end_7g-SVXSGE-200", "low_end_7g-SVXSGE-300"  
+        , "low_end_7g-SVXSGE-400"   , "low_end_7g-SVXSGE-500"   
+        , "low_end_g-2X3MV8-400", "low_end_g-2X3MV8-500"  
+        , "low_end_g-2X3MV8-600", "low_end_g-2X3MV8-700"
+        , "low_end_3p-3L05FA-1000", "low_end_3p-3L05FA-900"
+        , "low_end_3p-3L05FA-800","low_end_3p-3L05FA-700"]  
 
     common.setup_plot()
 
