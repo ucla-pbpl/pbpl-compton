@@ -198,7 +198,7 @@ def RunMonteCarlo(
         num_events_per_run, min_num_events_per_thread, max_num_threads):
     indices = np.array(indices).T
     runs_shape = [len(x)-int(y) for x, y in zip(indices[0], indices[3])]
-    if isinstance(num_events_per_run, int):
+    if not hasattr(num_events_per_run, '__len__'):
         num_events_per_run = num_events_per_run * np.ones(
             runs_shape, dtype=int)
 
@@ -269,7 +269,7 @@ def RunMonteCarlo(
                     if k not in fout:
                         dset_shape = runs_shape + list(v.shape)
                         dset = fout.create_dataset(
-                            k, shape=dset_shape, dtype=float)
+                            k, shape=dset_shape, dtype='float32')
                         num_events[k] = np.zeros(runs_shape)
                         dset.attrs.create('unit', np.string_(v.attrs['unit']))
                     fout[k][i] = v

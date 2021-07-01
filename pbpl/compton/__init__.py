@@ -19,5 +19,4 @@ from .core import in_volume
 from .core import gamma_to_edge
 from .core import edge_to_gamma
 from .tasks import *
-
-from .mc import run_main
+from .generators import repeater

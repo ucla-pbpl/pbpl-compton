@@ -3,6 +3,7 @@ import os, sys, random
 import argparse
 import numpy as np
 import toml
+import asteval
 from pbpl import compton
 import Geant4 as g4
 from Geant4.hepunit import *
@@ -61,33 +62,42 @@ def plot_sextupole_magnet_profile(ax, conf):
     pos = np.array((x, y, z))
     tpos = np.array([compton.transform(M, x) for x in pos.T]).T
     _, yscint, zscint = tpos
-    ax.plot(zscint/mm, yscint/mm, color='k', linewidth=0.4)
-    ax.plot(zscint/mm, -yscint/mm, color='k', linewidth=0.4)
+    ax.plot(zscint/mm, yscint/mm, color='#cccccc', linewidth=0.4, zorder=1)
+    ax.plot(zscint/mm, -yscint/mm, color='#cccccc', linewidth=0.4, zorder=1)
 
-def plot_deposition_2d(output, conf, edep, num_events, xbin, ybin, zbin):
+def plot_deposition_2d(filename, conf, edep, num_events, xbin, ybin, zbin):
 
     mpl.rc('figure.subplot', right=0.99, top=0.85, bottom=0.14, left=0.10)
-    fig = plot.figure(figsize=(244.0/72, 150.0/72))
-    ax = fig.add_subplot(1, 1, 1, aspect=1)
+    fig = plot.figure(figsize=(244.0/72, 163.0/72))
+    ax = fig.add_subplot(1, 1, 1) #, aspect=1)
 
-    # plot.subplots_adjust(top=0.85, bottom=0.14)
-#    plot.subplots_adjust(bottom=0.14)
-
-    gammas_per_shot = conf['Files']['GammasPerShot']
     edep = edep.sum(axis=conf['Files']['ProjectionAxis'])
-    edep /= num_events
+    Nbin = np.array((1, 1))
+    assert((np.array(edep.shape) % Nbin).sum() == 0)
+    edep = edep.reshape(
+        edep.shape[0]//Nbin[0], Nbin[0], edep.shape[1]//Nbin[1], Nbin[1])
+    edep = edep.sum(axis=3).sum(axis=1)
+    # edep /= num_events
+
     if conf['Files']['TransposeProjection'] == True:
         edep = edep.T
 
+    if conf['Colorbar']['Normalize']:
+        vmax = 1.0
+        plot_val = edep.T/edep.max()
+        cb_label = 'Energy deposited (arb)'
+    else:
+        gammas_per_shot = conf['Files']['GammasPerShot']
+        vmax = edep.max()/(GeV/gammas_per_shot)
+        plot_val = edep.T/(GeV/gammas_per_shot)
+        cb_label = 'GeV deposited per ' + conf['Annotation']['ShotLabel']
     image = ax.imshow(
-        edep.T/(GeV/gammas_per_shot), cmap=common.blue_cmap,
+        plot_val, cmap=common.blue_cmap,
         extent=(zbin[0]/mm, zbin[-1]/mm, ybin[0]/mm, ybin[-1]/mm),
-        vmax=edep.max()/(GeV/gammas_per_shot), aspect='auto')
-
+        vmax=vmax, aspect='equal', interpolation='none',
+        origin='lower')
     cb = fig.colorbar(image, shrink=0.95)
-    cb.set_label(
-        'GeV deposited per ' + conf['Annotation']['ShotLabel'],
-        rotation=270, labelpad=10)
+    cb.set_label(cb_label, rotation=270, labelpad=10)
 
     if 'QuadrupoleMagnetProfile' in conf:
         plot_quadrupole_magnet_profile(ax, conf['QuadrupoleMagnetProfile'])
@@ -105,64 +115,65 @@ def plot_deposition_2d(output, conf, edep, num_events, xbin, ybin, zbin):
     ax.set_xlim(zbin[0]/mm, zbin[-1]/mm)
     ax.set_ylim(ybin[0]/mm, ybin[-1]/mm)
 
+    # create safe interpreter for evaluation of configuration expressions
+    aeval = asteval.Interpreter(use_numpy=True)
+    for q in g4.hepunit.__dict__:
+        aeval.symtable[q] = g4.hepunit.__dict__[q]
+    edep_sum = edep.sum()
+    aeval.symtable['edep_sum'] = edep_sum
+    edep_avg = (edep/num_events).sum()
+    aeval.symtable['edep_avg'] = edep_avg
+
     if 'Title' in conf['Annotation']:
         plot.title(conf['Annotation']['Title'], fontsize=7)
+
     if 'Text' in conf['Annotation']:
         text = ''
         for s in conf['Annotation']['Text']:
-            text += '\n' + s
-        ax.text(*conf['Annotation']['loc'], text, transform=ax.transAxes)
+            text += '\n' + eval(s)
+        ax.text(
+            *conf['Annotation']['loc'], text, transform=ax.transAxes,
+            fontsize=7, verticalalignment='bottom')
 
     if 'EnergyScale' in conf:
-
         electron_energy_scale_coeff = np.array((
-            -3.773365167285961,
-            0.04696056580188213,
-            -0.0001345372207283992,
-            1.774027873917722e-7))
-
+            conf['EnergyScale']['Coefficients']))
         c0, c1, c2, c3 = electron_energy_scale_coeff
-
-        def gamma_energy_to_electron_energy(gamma_energy):
-            return gamma_energy*(
-                1-1/(1 + 2*gamma_energy/electon_mass_c2))
-
-        def electron_energy_to_gamma_energy(electron_energy):
-            return 0.5*(electron_energy + np.sqrt(
-                electron_energy**2 + 2 * electron_energy * electron_mass_c2))
-
         def x_to_electron_energy(x):
             xp = x/mm
             return MeV*np.exp(c0 + c1*xp + c2*xp**2 + c3*xp**3)
 
-        xvals = mm*np.linspace(1, 301, 300)
+        xvals = mm*np.arange(-400, 400, 1)
         gamma_energy_to_x = interp1d(
-            electron_energy_to_gamma_energy(
+            compton.edge_to_gamma(
                 x_to_electron_energy(xvals)), xvals)
         electron_energy_to_x = interp1d(x_to_electron_energy(xvals), xvals)
-
-        energy_to_x = gamma_energy_to_x
+        energy_to_x = {
+            'Electron' : electron_energy_to_x,
+            'Gamma' : gamma_energy_to_x }[conf['EnergyScale']['Type']]
 
         ax2 = ax.twiny()
-        # energy_vals = MeV*np.array(
-        #     (0.25, 0.5, 1, 2, 4.0), dtype=float)
-        energy_vals = MeV*np.array(
-            (0.1, 0.2, 0.4,0.8, 1.6, 3.2, 6.4), dtype=float)
-        def subdivide(x, N):
-            if N>1:
-                y = subdivide(x, N-1)
-                return np.sort(np.concatenate((y, 0.5*(y[1:] + y[:-1]))))
-            else:
-                return x
-        ax2.set_xticks(energy_to_x(energy_vals)/mm, minor=False)
-        ax2.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator())
-        ax2.set_xticks(
-            energy_to_x(np.array(subdivide(energy_vals, 3)))/mm, minor=True)
-        ax2.set_xticklabels([str(x) for x in energy_vals])
-        ax2.set_xlabel('Gamma Energy (MeV)')
-        ax2.set_xlim(ax.get_xlim())
+        major_vals = np.array((0.05, 0.1, 0.5, 1, 5, 10, 15, 20, 25, 30))*MeV
+        minor_vals = np.array(
+            (0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09,
+             0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9,
+             2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19,
+             21, 22, 23, 24, 26, 27, 28, 29))*MeV
+        ax2.set_xticks(energy_to_x(major_vals)/mm, minor=False)
+        ax2.set_xticks(energy_to_x(minor_vals)/mm, minor=True)
+        tick_labels = ['{:g}'.format(x) for x in major_vals]
+        tick_labels[0] = ''
+        ax2.set_xticklabels(tick_labels)
 
-    output.savefig(fig, transparent=False)
+        ax2.set_xlabel('{} Energy (MeV)'.format(conf['EnergyScale']['Type']))
+
+        ax2.set_xlim(ax.get_xlim())
+    # print(ax.get_xlim())
+    # ax2 = ax.twiny()
+    # ax2.set_xlim(0.0, 225.0)
+    plot.savefig(filename, transparent=True) #, dpi=100)
+    plot.close()
+#    output.savefig(fig, transparent=False)
 
 def main():
     args = get_args()
@@ -182,9 +193,9 @@ def main():
     path = os.path.dirname(filename)
     if path != '':
         os.makedirs(path, exist_ok=True)
-    output = PdfPages(filename)
-    plot_deposition_2d(output, conf, edep, num_events, xbin, ybin, zbin)
-    output.close()
+#    output = PdfPages(filename)
+    plot_deposition_2d(filename, conf, edep, num_events, xbin, ybin, zbin)
+#    output.close()
     return 0
 
 if __name__ == '__main__':

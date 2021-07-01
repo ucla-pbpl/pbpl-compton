@@ -1,0 +1,32 @@
+[Files]
+Input = '18000A.h5'
+CalcOutput = 'energy-scale-18000A.toml'
+PlotOutput = 'energy-scale-18000A.pdf'
+
+[Projection]
+Prefilter = [ [-0.1, 0.1], [-0.1, 0.1], [-0.1, 0.1] ]
+Transformation = [
+  ['TranslateX', 'RotateY', 'TranslateZ'],
+  [-40.0, -28.0, -10.0]]
+Postfilter = [ [-1.0, 1.0], [-10.0, 10.0], [-100.0, 250.0] ]
+
+[Plot]
+FigSize = [244, 120]
+XAxis = ['$z_s$ (mm)', 'mm', '(-10.0, 240.0)']
+YAxis = ['Energy (MeV)', 'MeV', '(0.02, 50)']
+
+[[Plot.Annotation]]
+Text = [
+  "r'${\\rm Coil\\ current} = 18000\\ {\\rm A}$'",
+  "r'$E(z_s)/{\\rm MeV} = \\exp (c_0 + c_1 z_s + c_2 z_s^2 + c_3 z_s^3)$'"]
+Location = [0.04, 0.95]
+Size = 7.0
+
+[[Plot.Annotation]]
+Text = [
+     "r'$c_0 = {:.3}$'.format(fitval['c0'])",
+     "r'$c_1 = {:.3}'.format(num2tex(fitval['c1'] * mm)) + r'\\;{\\rm mm}^{-1}$'",
+     "r'$c_2 = {:.3}'.format(num2tex(fitval['c2'] * mm**2)) + r'\\;{\\rm mm}^{-2}$'",
+     "r'$c_3 = {:.3}'.format(num2tex(fitval['c3'] * mm**3)) + r'\\;{\\rm mm}^{-3}$'"]
+Location = [0.6, 0.4]
+Size = 7.0

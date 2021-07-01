@@ -1,0 +1,37 @@
+Output = 'out/10mm-2mm.pdf'
+Input = 'out/10mm-2mm.h5'
+Normalization = 'out/uncollimated.h5'
+
+SmoothingSigma = 1.0   # mm
+xlim = [0.0, 230.0]
+ylim = [0.0, 1.2]
+
+[[Pages]]
+i0 = 0
+EnergyScaleCoeff = [
+   -3.773365167285, 0.04696056580188, -0.0001345372207283, 1.774027873917e-7 ]
+[Pages.Annotation]
+Text = [
+  'Tungsten collimator, current = 4.5 kA,',
+  'a = 2 mm, wall = 0.4 mm, thickness = 10 mm']
+Location = [0.04, 0.99]
+
+[[Pages]]
+i0 = 1
+EnergyScaleCoeff = [
+   -2.417428225611, 0.04156793777963, -0.0001270950909206, 1.96223402266e-7 ]
+[Pages.Annotation]
+Text = [
+  'Tungsten collimator, current = 9 kA,',
+  'a = 2 mm, wall = 0.4 mm, thickness = 10 mm']
+Location = [0.04, 0.99]
+
+[[Pages]]
+i0 = 2
+EnergyScaleCoeff = [
+   -1.534248330296, 0.03636407488444, -0.0001031942102578, 1.587405622061e-7 ]
+[Pages.Annotation]
+Text = [
+  'Tungsten collimator, current = 18 kA,',
+  'a = 2 mm, wall = 0.4 mm, thickness = 10 mm']
+Location = [0.04, 0.99]

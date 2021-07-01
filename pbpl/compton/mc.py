@@ -13,6 +13,7 @@ from pbpl import compton
 import h5py
 from importlib import import_module
 from collections import namedtuple
+from treelib import Node, Tree
 
 def get_parser():
     parser = argparse.ArgumentParser(
@@ -60,13 +61,13 @@ class PrimaryGeneratorAction(g4.G4VUserPrimaryGeneratorAction):
         try:
             particle_name, position, direction, energy = next(self.generator)
             self.pg.SetParticleByName(particle_name)
+            # self.pg.SetParticlePolarization(g4.G4ThreeVector(0, 1, 0))
             self.pg.SetParticlePosition(position)
             self.pg.SetParticleMomentumDirection(direction)
             self.pg.SetParticleEnergy(energy)
             self.pg.GeneratePrimaryVertex(event)
         except StopIteration:
             event.SetEventAborted()
-
 
 class MyRunAction(g4.G4UserRunAction):
     "My Run Action"
@@ -76,7 +77,6 @@ class MyRunAction(g4.G4UserRunAction):
 
     def EndOfRunAction(self, run):
         pass
-
 
 class StatusEventAction(g4.G4UserEventAction):
     "Status Event Action"
@@ -102,6 +102,59 @@ class StatusEventAction(g4.G4UserEventAction):
             self.prev_time = curr_time
         self.count += 1
 
+class MyStackingAction(g4.G4UserStackingAction):
+    "My Stacking Action"
+
+    def ClassifyNewTrack(self, track):
+        print('ClassifyNewTrack')
+        return track
+
+    def NewStage(self):
+        print('NewStage')
+
+    def PrepareNewEvent(self):
+        print('PrepareNewEvent')
+
+TrackingNode = namedtuple(
+    'TrackingNode', ['particle', 'process', 'volume', 'energy'])
+
+class MyTrackingAction(g4.G4UserTrackingAction):
+    """My Tracking Action
+
+    In Geant4, tracks aren't stored throughout the duration of an
+    event.  Geant4 deletes a track once its finish tracking all of its
+    descendent tracks.
+
+    We would like to access a minimal representation of the tracking
+    tree during event analysis.  To do this, we build and store our
+    own tree on an event-by-event basis.  For the lack of a better
+    alternative, the tree is stored in the global context.
+    """
+
+    def PreUserTrackingAction(self, track):
+        creator = track.GetCreatorProcess()
+        if creator is None:
+            process = 'primary'
+        else:
+            process = creator.GetProcessName()
+
+        global tracking_tree
+        if track.GetTrackID() == 1:
+            tracking_tree = Tree()
+            parent_node = None
+        else:
+            parent_node = track.GetParentID()
+
+        if not track.GetTrackID() in tracking_tree:
+            tracking_tree.create_node(
+                identifier=track.GetTrackID(),
+                parent=parent_node,
+                data=TrackingNode(
+                    track.GetDefinition().GetParticleName(),
+                    process,
+                    track.GetVolume().GetName(),
+                    track.GetKineticEnergy()))
+
 
 class MySteppingAction(g4.G4UserSteppingAction):
     "My Stepping Action"
@@ -119,16 +172,10 @@ class SimpleDepositionSD(g4.G4VSensitiveDetector):
         self.position = []
         self.edep = []
 
-    def Initialize(self, hit_collection):
-        pass
-
     def ProcessHits(self, step, history):
         self.position.append(
             G4ThreeVector_to_list(step.GetPreStepPoint().GetPosition()))
         self.edep.append(step.GetTotalEnergyDeposit())
-
-    def EndOfEvent(self, hit_collection):
-        pass
 
     def finalize(self, num_events):
         path = os.path.dirname(self.filename)
@@ -140,10 +187,19 @@ class SimpleDepositionSD(g4.G4VSensitiveDetector):
         f['edep'].attrs.create('num_events', num_events)
         f.close()
 
+TreeFilter = namedtuple(
+    'TreeFilter', ['mode', 'process', 'volume', 'level'])
+
 class BinnedDepositionSD(g4.G4VSensitiveDetector):
     def __init__(self, name, conf):
         g4.G4VSensitiveDetector.__init__(self, name)
         self.filename = conf['File']
+        if 'TreeFilter' in conf:
+            c = conf['TreeFilter']
+            self.tree_filter = TreeFilter(*c[0:3], int(c[3]))
+        else:
+            self.tree_filter = None
+
         if 'Group' in conf:
             self.groupname = conf['Group']
         else:
@@ -157,18 +213,63 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
         self.update_interval = self.hist.size
         self.position = []
         self.edep = []
-
-    def Initialize(self, hit_collection):
-        pass
+        try:
+            os.unlink(self.filename)
+        except OSError as e:
+            pass
 
     def ProcessHits(self, step, history):
+        global tracking_tree
+
+        track = g4.gTrackingManager.GetTrack()
+        A = list(tracking_tree.rsearch(track.GetTrackID()))
+        A.reverse()
+
+        step = track.GetStep()
+        point = step.GetPostStepPoint()
+        prestep = step.GetPreStepPoint()
+
+        # if len(A) == 1:
+        #     tracking_node = tracking_tree[A[-1]].data
+        # else:
+        #     tracking_node = tracking_tree[A[-2]].data
+
+        # print(
+        #     'SD: {} initial:({},{},{},{:.3g}) {} event={} parent={} track={} step={} process={} KE={:.3f} dE={:.3f}'.format(
+        #         A,
+        #         tracking_node.particle,
+        #         tracking_node.process,
+        #         tracking_node.volume,
+        #         tracking_node.energy/MeV,
+        #         track.GetDefinition().GetParticleName(),
+        #         g4.gEventManager.GetNonconstCurrentEvent().GetEventID(),
+        #         track.GetParentID(),
+        #         track.GetTrackID(),
+        #         track.GetCurrentStepNumber(),
+        #         point.GetProcessDefinedStep().GetProcessName(),
+        #         prestep.GetKineticEnergy()/keV,
+        #         step.GetTotalEnergyDeposit()/keV))
+
+        if self.tree_filter is not None:
+            mode, process, volume, level = self.tree_filter
+            if level >= len(A):
+                match = False
+            else:
+                data = tracking_tree[A[level]].data
+                match = (
+                    (data.process == process) and
+                    (data.volume == volume))
+            if mode == 'Exclude' and match == True:
+                return
+            elif mode == 'Include' and match == False:
+                return
+
         self.position.append(
             G4ThreeVector_to_list(step.GetPreStepPoint().GetPosition()))
         self.edep.append(step.GetTotalEnergyDeposit())
-
-    def EndOfEvent(self, hit_collection):
         if len(self.edep) > self.update_interval:
             self.update_histo()
+        return
 
     def update_histo(self):
         if len(self.position)>0:
@@ -184,12 +285,12 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
         path = os.path.dirname(self.filename)
         if path != '':
             os.makedirs(path, exist_ok=True)
-        fout = h5py.File(self.filename, 'w')
+        fout = h5py.File(self.filename, 'a')
         if self.groupname is not None:
             gout = fout.create_group(self.groupname)
         else:
             gout = fout
-        gout['edep'] = self.hist/MeV
+        gout['edep'] = self.hist.astype('float32')/MeV
         gout['edep'].attrs.create('num_events', num_events)
         gout['edep'].attrs.create('unit', np.string_('MeV'))
         for i, dset_name in enumerate(['xbin', 'ybin', 'zbin']):
@@ -198,17 +299,15 @@ class BinnedDepositionSD(g4.G4VSensitiveDetector):
         fout.close()
 
 TransmissionResult = namedtuple(
-    'TransmissionResult', ['position', 'direction', 'energy'])
+    'TransmissionResult', ['position', 'direction', 'energy', 'time'])
 
 class TransmissionSD(g4.G4VSensitiveDetector):
     def __init__(self, name, filename, particles):
         g4.G4VSensitiveDetector.__init__(self, name)
         self.filename = filename
         self.particles = particles
-        self.results = { p:TransmissionResult([], [], []) for p in particles }
-
-    def Initialize(self, hit_collection):
-        pass
+        self.results = {
+            p:TransmissionResult([], [], [], []) for p in particles }
 
     def ProcessHits(self, step, history):
         proc = step.GetPostStepPoint().GetProcessDefinedStep()
@@ -216,16 +315,17 @@ class TransmissionSD(g4.G4VSensitiveDetector):
             return
         particle_name = str(step.GetTrack().GetDefinition().GetParticleName())
         if particle_name in self.particles:
-            result = self.results[particle_name]
             point = step.GetPostStepPoint()
-            result.position.append(
-                G4ThreeVector_to_list(point.GetPosition()))
-            result.direction.append(
-                G4ThreeVector_to_list(point.GetMomentumDirection()))
-            result.energy.append(point.GetKineticEnergy())
 
-    def EndOfEvent(self, hit_collection):
-        pass
+            if particle_name in self.results:
+                result = self.results[particle_name]
+                point = step.GetPostStepPoint()
+                result.position.append(
+                    G4ThreeVector_to_list(point.GetPosition()))
+                result.direction.append(
+                    G4ThreeVector_to_list(point.GetMomentumDirection()))
+                result.energy.append(point.GetKineticEnergy())
+                result.time.append(point.GetGlobalTime())
 
     def finalize(self, num_events):
         path = os.path.dirname(self.filename)
@@ -237,9 +337,41 @@ class TransmissionSD(g4.G4VSensitiveDetector):
             gout['position'] = np.array(result.position)/mm
             gout['direction'] = np.array(result.direction)
             gout['energy'] = np.array(result.energy)/MeV
+            gout['time'] = np.array(result.time)/ns
         fout['num_events'] = num_events
         fout.close()
 
+class FlagSD(g4.G4VSensitiveDetector):
+    def __init__(self, name, conf):
+        g4.G4VSensitiveDetector.__init__(self, name)
+        self.M = compton.build_transformation(conf['Transformation'], mm, deg)
+        aeval = asteval.Interpreter(use_numpy=True)
+        for q in g4.hepunit.__dict__:
+            aeval.symtable[q] = g4.hepunit.__dict__[q]
+        self.vol = np.array((conf['Volume']))*mm
+        self.threshold = conf['Threshold']*MeV
+        self.limit_count = conf['LimitCount']
+        self.num_flagged = 0
+        self.curr_event = -1
+
+    def ProcessHits(self, step, history):
+        event_id = g4.gEventManager.GetConstCurrentEvent().GetEventID()
+        if event_id != self.curr_event:
+            self.curr_event = event_id
+            self.tally = 0
+        x = G4ThreeVector_to_list(step.GetPreStepPoint().GetPosition())
+        Mx = compton.transform(self.M, np.array(x))
+        if self.tally < self.threshold:
+            if compton.in_volume(self.vol, np.array((Mx,)))[0]:
+                self.tally += step.GetTotalEnergyDeposit()
+                if self.tally >= self.threshold:
+                    self.num_flagged += 1
+                    if self.num_flagged <= self.limit_count:
+                        g4.gApplyUICommand('/event/keepCurrentEvent')
+
+    def finalize(self, num_events):
+        g4.gApplyUICommand('/vis/enable')
+        g4.gApplyUICommand('/vis/viewer/flush')
 
 def depth_first_tree_traversal(node):
     q = deque()
@@ -255,7 +387,6 @@ def depth_first_tree_traversal(node):
             yield v
     while q:
         yield from depth_first_tree_traversal(q.popleft())
-
 
 class MyGeometry(g4.G4VUserDetectorConstruction):
     def __init__(self, conf):
@@ -288,6 +419,10 @@ class MyGeometry(g4.G4VUserDetectorConstruction):
             if geom_type == 'G4Box':
                 solid = g4.G4Box(
                     geom_name, geom['pX']*mm, geom['pY']*mm, geom['pZ']*mm)
+            elif geom_type == 'G4Tubs':
+                solid = g4.G4Tubs(
+                    geom_name, geom['pRMin']*mm, geom['pRMax']*mm,
+                    geom['pDz']*mm, geom['pSPhi']*deg, geom['pDPhi']*deg)
             elif geom_type == 'CadMesh':
                 mesh = compton.cadmesh.TessellatedMesh(geom['File'])
                 if 'SolidName' in geom:
@@ -318,6 +453,8 @@ class MyGeometry(g4.G4VUserDetectorConstruction):
                         rotation.rotateY(value*deg)
                     elif operation == 'RotateZ':
                         rotation.rotateZ(value*deg)
+                    else:
+                        assert(False)
                     transform = (
                         g4.G4Transform3D(rotation, translation)*transform)
             if 'Rotation' in geom:
@@ -337,11 +474,11 @@ class MyGeometry(g4.G4VUserDetectorConstruction):
                 g4.G4Transform3D(rotation, translation) * transform,
                 geom_name, logical, parent_p, many, 0, check_overlap)
 
+            if 'Visible' in geom:
+                logical.SetVisAttributes(g4.G4VisAttributes(geom['Visible']))
             if 'Color' in geom:
                 logical.SetVisAttributes(
                     g4.G4VisAttributes(g4.G4Color(*geom['Color'])))
-            if 'Visible' in geom:
-                logical.SetVisAttributes(g4.G4VisAttributes(geom['Visible']))
 
             geom_s[geom_name] = solid
             geom_l[geom_name] = logical
@@ -352,7 +489,6 @@ class MyGeometry(g4.G4VUserDetectorConstruction):
     def ConstructSDandField(self):
         sys.exit()
         pass
-
 
 def create_fields(conf):
     result = {}
@@ -383,12 +519,60 @@ def create_fields(conf):
         result[name] = field
     return result
 
+def create_materials(conf):
+    result = {}
+
+    if 'Materials' not in conf:
+        return result
+
+    for name in (conf['Materials']):
+        c = conf['Materials'][name]
+        mat = g4.gNistManager.FindOrBuildMaterial(name)
+        if mat is None:
+            atoms = c['AtomicComposition']
+            mat = g4.G4Material(name, c['Density']*gram/cm**3, len(atoms[0]))
+            for atom_name, num_atoms in zip(*atoms):
+                mat.AddElement(
+                    g4.gNistManager.FindOrBuildElement(atom_name),
+                    num_atoms)
+        for property_name in c['Properties']:
+            property_table = mat.GetMaterialPropertiesTable()
+            if property_table is None:
+                property_table = compton.G4MaterialPropertiesTable()
+                mat.SetMaterialPropertiesTable(property_table)
+            property_conf = c['Properties'][property_name]
+            if 'Value' in property_conf:
+                property_table.AddConstProperty(
+                    property_name, property_conf['Value'])
+            else:
+                values = np.array(property_conf['Values'])
+                if 'PhotonEnergies' in property_conf:
+                    photon_energies = np.array(
+                        property_conf['PhotonEnergies']) * eV
+                else:
+                    photon_wavelengths = np.array(
+                        property_conf['PhotonWavelengths']) * nanometer
+                    photon_energies = h_Planck*c_light/photon_wavelengths
+                assert(len(values) == len(photon_energies))
+                idx = photon_energies.argsort()
+                photon_energies = photon_energies[idx]
+                values = values[idx]
+                property_table.AddProperty(
+                    property_name, photon_energies, values)
+
+        result[name] = mat
+    return result
+
+
 def create_detectors(conf):
     global geom_l
     result = {}
 
     if 'Detectors' not in conf:
         return result
+
+    global multi_sd
+    multi_sd = {}
 
     for name in (conf['Detectors']):
         c = conf['Detectors'][name]
@@ -399,11 +583,17 @@ def create_detectors(conf):
             sd = BinnedDepositionSD('pbpl/' + name, c)
         elif sd_type == 'TransmissionSD':
             sd = TransmissionSD('pbpl/' + name, c['File'], c['Particles'])
+        elif sd_type == 'FlagSD':
+            sd = FlagSD('pbpl/' + name, c)
         else:
             raise ValueError(
                 "unimplemented Detector type '{}'".format(sd_type))
         for volume in c['Volumes']:
-            geom_l[volume].SetSensitiveDetector(sd)
+            if volume not in multi_sd:
+                msd = compton.G4MultiSensitiveDetector('pbpl/' + volume)
+                geom_l[volume].SetSensitiveDetector(msd)
+                multi_sd[volume] = msd
+            multi_sd[volume].AddSD(sd)
         result[name] = sd
     return result
 
@@ -458,10 +648,25 @@ def run_main(args):
     for action in event_actions.values():
         g4.gRunManager.SetUserAction(action)
 
+    # global stacking_action
+    # stack_action = MyStackingAction()
+    # g4.gRunManager.SetUserAction(stack_action)
+
+    global tracking_action
+    track_action = MyTrackingAction()
+    g4.gRunManager.SetUserAction(track_action)
+
     global fields
     fields = create_fields(args.conf)
 
     g4.gRunManager.Initialize()
+
+    global materials
+    materials = create_materials(args.conf)
+    # for mat in materials.values():
+    #     property_table = mat.GetMaterialPropertiesTable()
+    #     if property_table is not None:
+    #         property_table.DumpTable()
 
     global detectors
     detectors = create_detectors(args.conf)
@@ -469,6 +674,7 @@ def run_main(args):
     for x in args.macro_filenames:
         g4.gControlExecute(x)
 
+    # g4.gApplyUICommand('/tracking/storeTrajectory 1')
     g4.gRunManager.BeamOn(num_events)
 
     for k, sd in detectors.items():

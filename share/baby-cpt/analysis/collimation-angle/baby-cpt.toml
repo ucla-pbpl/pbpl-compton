@@ -1,0 +1,84 @@
+[PrimaryGenerator]
+PythonGenerator = 'generator.random_spray'
+PythonGeneratorArgs = [
+  'e-', '[0*mm, 0*mm]', '[0*deg, 0*deg]', '[1*MeV, 10*MeV]']
+NumEvents = 100000
+
+[Geometry.World]
+Type = 'G4Box'
+pX = 2000.0   # X half-length (unit=mm)
+pY = 2000.0   # Y half-length (unit=mm)
+pZ = 2400.0   # Z half-length (unit=mm)
+Material = 'G4_Galactic'
+Visible = false
+
+[Geometry.World.ComptonPoleTop]
+Type = 'CadMesh'
+File = '../../cad/yoke.stl'
+SolidName = 'cpt_pole:top'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.ComptonPoleBottom]
+Type = 'CadMesh'
+File = '../../cad/yoke.stl'
+SolidName = 'cpt_pole:bottom'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.Collimator]
+Type = 'CadMesh'
+File = '../../cad/collimator/12mm-2mm/coarse.stl'
+Material = 'G4_W'
+Color = [0.8, 0.8, 0.8, 1.0]
+
+[Geometry.World.ScintillatorShield]
+Type = 'CadMesh'
+File = '../../cad/shield.stl'
+Material = 'G4_W'
+Color = [0.8, 0.8, 0.8, 1.0]
+
+[Geometry.World.ComptonYoke]
+Type = 'CadMesh'
+File = '../../cad/yoke.stl'
+SolidName = 'cpt_yoke:right'
+Material = 'G4_Fe'
+Color = [1.0, 1.0, 1.0, 1.0]
+
+[Geometry.World.Coils]
+Type = 'CadMesh'
+File = '../../cad/coils.stl'
+Material = 'G4_Cu'
+Color = [0.72, 0.45, 0.20, 1.0]
+
+[Geometry.World.ComptonScint]
+Type = 'G4Box'
+pX = 5.0
+pY = 75.0
+pZ = 112.5
+Material = 'G4_CESIUM_IODIDE'
+Transformation = [
+  ['TranslateZ', 'TranslateZ', 'TranslateX', 'RotateY', 'TranslateX'],
+  [112.5, 10.0, 5.0, 28.0, 40.1]]
+Color = [0.082, 0.722, 0.859, 0.3]
+
+[Fields.Cpt]
+Type = 'ImportedMagneticField'
+File = '../../field/B-field-4500A.h5'
+DeltaChord = 0.02  # tracking resolution within magnetic field (mm)
+
+[Detectors.ComptonScint]
+Type = 'BinnedDepositionSD'
+Volumes = ['World.ComptonScint']
+Transformation = [
+   ['TranslateX', 'RotateY', 'TranslateZ'],
+   [-40.0, -28.0, -10.0]]
+BinEdges = [
+   'mm*arange(0.0, 12.01, 0.5)',
+   'mm*arange(-75.0, 75.01, 0.5)',
+   'mm*arange(0.0, 225.01, 0.5)']
+File = 'edep.h5'
+
+[EventActions.Status]
+Type = 'Status'
+UpdatePeriod = 1.0
