@@ -71,7 +71,8 @@ def plot_spectral_energy_density(
     #dE_last = photon_energy[-1]-photon_energy[-2]
     #energy_range_lengths = np.append(np.diff(photon_energy),dE_last)
     want_num_photons = 5e10
-    have_num_photons = simps(spectral_photon_density, photon_energy) #1
+    photon_energy_selected_indices = photon_energy>0.18*MeV
+    have_num_photons = simps(spectral_photon_density[photon_energy_selected_indices], photon_energy[photon_energy_selected_indices]) #1
     print("have num photons {:.2e}".format(float(have_num_photons)))
     percentage = want_num_photons/have_num_photons
     print(percentage)
@@ -268,7 +269,7 @@ def main():
         pwfa_datasets = [
             'E300 PWFA/Matched Trailing (s=0.06)/both',
             'E300 PWFA/Matched Trailing (s=0.06)/trailing']
-        output = 'dec6-pwfa-1d-160-7'
+        output = 'may2-pwfa-1d-160-7'
 
         #(output, fin, group_names, xscale, yscale, xlim, ylim,
         #labels=None, display_legend=True):
